@@ -535,6 +535,25 @@ const sectionIconMap = {
 }
 const pendingBadgeSections = new Set(['overview', 'pending-guarantee', 'pending-withdraw', 'pending-feedback', 'token-manage'])
 const currentSectionCount = computed(() => formatNumber(countMap.value[currentSection.value?.id] ?? 0))
+// ── 账户宝石余额实时刷新 ──────────────────────────────────────────────
+const liveGemBalance = ref(null)       // null=未查 | number=已查
+const liveGemLoading = ref(false)
+const liveGemError = ref('')
+
+async function fetchLiveGemBalance() {
+  liveGemLoading.value = true
+  liveGemError.value = ''
+  try {
+    const data = await api.get('/api/manage/gem-balance')
+    liveGemBalance.value = data.balance ?? data.data?.balance ?? null
+  } catch (err) {
+    liveGemError.value = err.message || '查询失败'
+    liveGemBalance.value = null
+  } finally {
+    liveGemLoading.value = false
+  }
+}
+
 const summaryCards = computed(() => [
   {
     label: '累计充值',
@@ -563,9 +582,12 @@ const summaryCards = computed(() => [
   },
   {
     label: '账户宝石余额',
-    value: formatNumber(dashboard.value.totals.platformAccountBalance),
-    helper: '平台方块兽账户估算余额',
+    value: liveGemBalance.value !== null
+      ? formatNumber(liveGemBalance.value)
+      : formatNumber(dashboard.value.totals.platformAccountBalance),
+    helper: liveGemBalance.value !== null ? '游戏接口实时余额' : '估算值（点刷新获取实时）',
     highlight: true,
+    isGemCard: true,
   },
   {
     label: '用户钱包总余额',
@@ -1145,9 +1167,24 @@ onMounted(async () => {
           <el-row :gutter="16" class="block-space">
             <el-col v-for="item in summaryCards" :key="item.label" :xs="24" :sm="12" :lg="6">
               <el-card shadow="hover" :class="['metric-card', item.highlight ? 'metric-card--highlight' : '']">
-                <div class="metric-label">{{ item.label }}</div>
-                <div class="metric-value">{{ item.value }}</div>
-                <div class="metric-helper">{{ item.helper }}</div>
+                <div class="metric-label">
+                  {{ item.label }}
+                  <el-button
+                    v-if="item.isGemCard"
+                    link
+                    size="small"
+                    :loading="liveGemLoading"
+                    @click.stop="fetchLiveGemBalance"
+                    style="margin-left:4px;font-size:12px;"
+                    :title="liveGemError || '点击查询游戏账户实时余额'"
+                  >{{ liveGemBalance !== null ? '🔄' : '查实时' }}</el-button>
+                </div>
+                <div class="metric-value" :style="item.isGemCard && liveGemError ? 'color:#f56c6c' : ''">
+                  {{ item.isGemCard && liveGemLoading ? '查询中…' : item.value }}
+                </div>
+                <div class="metric-helper">
+                  {{ item.isGemCard && liveGemError ? liveGemError : item.helper }}
+                </div>
               </el-card>
             </el-col>
           </el-row>

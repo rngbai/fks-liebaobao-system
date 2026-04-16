@@ -211,6 +211,74 @@ def _qr_poll_and_login(session_id: str, q_uuid: str):
             _QR_SESSIONS[session_id]['status'] = 'timeout'
 
 
+# ── 实时宝石余额查询（fks-api market/index，不依赖 PIL/tkinter） ───────────────
+_GEM_BALANCE_CACHE: dict = {}   # {cache_key: (balance, expire_ts)}
+_GEM_CACHE_TTL = 30             # 秒，避免频繁打 game 接口
+
+def _fetch_live_gem_balance(user_id: str, token: str, token_type: str = 'fks') -> 'int | None':
+    """
+    实时调用 fks-api market/index 查宝石余额（turnInfo.qty）。
+    token_type='cw' 使用潮玩宇宙 UA，否则使用方块兽 UA。
+    失败返回 None。
+    """
+    import hashlib, hmac as _hmac, certifi as _certifi
+    import requests as _req
+    from urllib.parse import quote
+
+    _SIGN_KEY   = "BHbE9oCgl58NUz5oJVDUFMLJO9vGQnvdv0Lem3315wQG8laB4dGcxIXFLfDsInHTa"
+    _DEVICE_ID  = "d6ccb5916deec12a570660d326a1ba59162045e3"
+    _ANDROID_ID = "333c86058490a30b"
+    _PKG        = "com.caike.union"
+    _VER        = "6.1.1"
+    _CHANNEL    = "90033"
+    _HOST       = "fks-api.lucklyworld.com"
+    _PATH       = "/v11/api/market/index"
+
+    ua = ("com.caike.lomo/4.3.5 (Linux; U; Android 12; zh-cn) (official; 403005)"
+          if str(token_type).lower() == 'cw'
+          else f"{_PKG}/{_VER}-{_CHANNEL} Dalvik/2.1.0 (Linux; U; Android 12; BVL-AN16 Build/68e417b.1)")
+
+    # 简单本地缓存，30 秒内复用
+    cache_key = f"{user_id}:{token_type}"
+    cached = _GEM_BALANCE_CACHE.get(cache_key)
+    if cached and time.time() < cached[1]:
+        return cached[0]
+
+    data = {"childrenId": "1-1", "productType": "", "extraParam": ""}
+    parameter = f"uid={user_id}&version={_VER}"
+    ts = str(round(time.time() * 1000))
+    body_str = "&".join([f"{k}={quote(str(v), safe='')}" for k, v in data.items()])
+    body_md5 = hashlib.md5(body_str.encode()).hexdigest()
+    mes = (f"post|{_PATH}|{parameter}|{ts}|"
+           f"deviceId={_DEVICE_ID}&androidId={_ANDROID_ID}&userId={user_id}&token={token}"
+           f"&packageId={_PKG}&version={_VER}&channel={_CHANNEL}|{body_md5}")
+    sign = _hmac.new(_SIGN_KEY.encode(), mes.encode(), hashlib.sha256).hexdigest()
+
+    url = f"https://{_HOST}{_PATH}?{parameter}"
+    headers = {
+        "Host": _HOST, "User-Agent": ua,
+        "packageId": _PKG, "version": _VER, "channel": _CHANNEL,
+        "deviceId": _DEVICE_ID, "androidId": _ANDROID_ID,
+        "userId": user_id, "token": token, "IMEI": "",
+        "ts": ts, "sign": sign,
+        "Connection": "Keep-Alive", "Accept-Encoding": "gzip",
+        "Content-Type": "application/x-www-form-urlencoded",
+    }
+    try:
+        r = _req.post(url, data=data, headers=headers, timeout=15, verify=_certifi.where())
+        resp = r.json()
+        if resp.get("errorCode"):
+            return None
+        qty = (resp.get("turnInfo") or {}).get("qty")
+        if qty is None:
+            return None
+        balance = max(0, int(float(qty)))
+        _GEM_BALANCE_CACHE[cache_key] = (balance, time.time() + _GEM_CACHE_TTL)
+        return balance
+    except Exception:
+        return None
+
+
 HOST = os.environ.get('RECHARGE_VERIFY_HOST', '0.0.0.0')
 PORT = int(os.environ.get('RECHARGE_VERIFY_PORT', '5000'))
 
@@ -968,6 +1036,30 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 build_json(self, 200, ok(data, '查询成功'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取游戏凭证失败: {exc}'})
+            return
+
+        if parsed.path == '/api/manage/gem-balance':
+            if not self.ensure_admin():
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    uid, tk, tk_type = get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
+                    conn.commit()
+                if not uid or not tk:
+                    build_json(self, 200, {'ok': False, 'message': '游戏凭证未配置，请先在 Token 管理中设置'})
+                    return
+                balance = _fetch_live_gem_balance(uid, tk, tk_type)
+                if balance is None:
+                    build_json(self, 200, {'ok': False, 'message': 'Token 已失效或游戏接口异常，请刷新 Token'})
+                    return
+                build_json(self, 200, ok({
+                    'balance': balance,
+                    'userId': uid,
+                    'tokenType': tk_type,
+                    'cached': False,
+                }, f'宝石余额查询成功：{balance}'))
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'查询余额失败: {exc}'})
             return
 
         if parsed.path == '/api/manage/token-config/qr-status':
