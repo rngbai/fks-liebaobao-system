@@ -5,7 +5,10 @@ import logging
 import logging.handlers
 import mimetypes
 import os
+import re
 import secrets
+import threading
+import time
 import uuid
 from pathlib import Path
 
@@ -95,6 +98,118 @@ from select_rockLog import (
     fetch_recent_sell_logs,
     verify_recent_recharge,
 )
+
+# ── 微信扫码登录（潮玩宇宙 CW token） ──────────────────────────────────────
+# 内联扫码逻辑，不依赖 tkinter/PIL，仅用 requests + base64
+
+_CW_WX_CONFIG = {
+    "appid": "wx27a18e6dcb0db741",
+    "bundleid": "com.caike.lomo",
+    "scope": "snsapi_userinfo",
+    "state": "",
+    "pass_ticket": "",
+}
+_CW_LOGIN_DOMAIN = "android-api.lucklyworld.com"
+_CW_PKG = "com.caike.lomo"
+_CW_VER = "4.3.5"
+_CW_CHANNEL = "official"
+_CW_CH_CODE = "403005"
+
+# 存储扫码会话状态: session_id -> {status, qrUuid, userId, token, error, expires_at}
+_QR_SESSIONS: dict = {}
+_QR_LOCK = threading.Lock()
+_QR_SESSION_TTL = 180  # 秒
+
+
+def _qr_fetch_image(q_uuid: str) -> bytes:
+    """拉取二维码图片字节，不依赖 PIL。"""
+    import requests as _req
+    hdrs = {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+        "accept": "image/avif,image/webp,image/apng,*/*;q=0.8",
+    }
+    r = _req.get(f"https://open.weixin.qq.com/connect/qrcode/{q_uuid}", headers=hdrs, timeout=15)
+    r.raise_for_status()
+    return r.content
+
+
+def _qr_fetch_uuid() -> str:
+    """拉取微信二维码 uuid。"""
+    import requests as _req
+    hdrs = {
+        "user-agent": (
+            "Mozilla/5.0 (Linux; Android 9; PBBT00 Build/PPR1.180610.011; wv) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.110 "
+            "Mobile Safari/537.36 MicroMessenger/7.0.17"
+        ),
+        "Host": "open.weixin.qq.com",
+    }
+    r = _req.get("http://open.weixin.qq.com/connect/app/qrconnect",
+                 params=_CW_WX_CONFIG, headers=hdrs, timeout=20)
+    r.raise_for_status()
+    m = re.search(r'uuid:\s*"([^"]+)"', r.text or "")
+    if m:
+        return m.group(1)
+    raise ValueError("无法从微信响应中提取 uuid")
+
+
+def _qr_poll_and_login(session_id: str, q_uuid: str):
+    """后台线程：轮询微信扫码结果，成功则换潮玩 token 并存入会话。"""
+    import requests as _req, hashlib as _hlib, random as _rand, string as _str
+    hdrs = {
+        "user-agent": "Mozilla/5.0 MicroMessenger/7.0.17",
+        "Host": "long.open.weixin.qq.com",
+    }
+    params = {"uuid": q_uuid, "f": "url", "_": int(time.time() * 1000)}
+    deadline = time.time() + _QR_SESSION_TTL
+
+    while time.time() < deadline:
+        try:
+            r = _req.get("https://long.open.weixin.qq.com/connect/l/qrconnect",
+                         params=params, headers=hdrs, timeout=15)
+            if "oauth?code=" in r.text:
+                code = r.text.split("oauth?code=")[1].split("&")[0]
+                # 换潮玩 token
+                dev_id = _hlib.sha1("".join(_rand.choices(_str.ascii_lowercase + _str.digits, k=20)).encode()).hexdigest()
+                and_id = "".join(_rand.choices(_str.ascii_lowercase + _str.digits, k=16))
+                login_hdrs = {
+                    "User-Agent": f"{_CW_PKG}/{_CW_VER} (Linux; U; Android 12; zh-cn) ({_CW_CHANNEL}; {_CW_CH_CODE})",
+                    "packageId": _CW_PKG, "version": _CW_VER, "channel": _CW_CHANNEL,
+                    "Accept-Encoding": "gzip", "deviceId": dev_id, "androidId": and_id,
+                    "IMEI": "", "Content-Type": "application/x-www-form-urlencoded",
+                    "Host": _CW_LOGIN_DOMAIN, "Connection": "Keep-Alive",
+                }
+                login_params = {"uid": "", "version": _CW_VER}
+                cw_uid = cw_token = None
+                for path in ["/api/auth/wx", "/v9/api/auth/wx", "/v11/api/auth/wx"]:
+                    for data in [{"credential": code}, {"credential": code, "deviceName": "HONOR BVL-AN16"}]:
+                        try:
+                            resp = _req.post(f"https://{_CW_LOGIN_DOMAIN}{path}",
+                                             params=login_params, headers=login_hdrs, data=data, timeout=20)
+                            j = resp.json() if resp.text else {}
+                            cw_token = j.get("token") or (j.get("data") or {}).get("token")
+                            cw_uid = j.get("userId") or (j.get("data") or {}).get("userId")
+                            if cw_token and cw_uid:
+                                break
+                        except Exception:
+                            pass
+                    if cw_token and cw_uid:
+                        break
+                with _QR_LOCK:
+                    if session_id in _QR_SESSIONS:
+                        if cw_token and cw_uid:
+                            _QR_SESSIONS[session_id].update({'status': 'success', 'userId': str(cw_uid), 'token': cw_token})
+                        else:
+                            _QR_SESSIONS[session_id].update({'status': 'error', 'error': '微信 code 换取潮玩 token 失败'})
+                return
+        except Exception:
+            pass
+        time.sleep(2)
+
+    with _QR_LOCK:
+        if session_id in _QR_SESSIONS:
+            _QR_SESSIONS[session_id]['status'] = 'timeout'
+
 
 HOST = os.environ.get('RECHARGE_VERIFY_HOST', '0.0.0.0')
 PORT = int(os.environ.get('RECHARGE_VERIFY_PORT', '5000'))
@@ -477,13 +592,13 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             return payload
 
     def get_live_credentials(self, conn=None):
-        """从 DB 读当前游戏凭证，优先 DB，降级到启动时的环境变量。"""
+        """从 DB 读当前游戏凭证，返回 (uid, tk, token_type)，优先 DB，降级到启动时环境变量。"""
         if conn is not None:
             return get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
         with get_connection(autocommit=False) as c:
-            uid, tk = get_live_game_credentials(c, RECEIVER_BEAST_ID, token)
+            uid, tk, token_type = get_live_game_credentials(c, RECEIVER_BEAST_ID, token)
             c.commit()
-        return uid, tk
+        return uid, tk, token_type
 
     def do_GET(self):
 
@@ -549,8 +664,8 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
         if parsed.path == '/api/recharge/recent':
             minutes = max(1, to_int(params.get('minutes', [DEFAULT_VERIFY_MINUTES])[0], DEFAULT_VERIFY_MINUTES))
             try:
-                live_uid, live_tk = self.get_live_credentials()
-                logs = fetch_recent_sell_logs(live_uid, live_tk, minutes=minutes)
+                live_uid, live_tk, live_tk_type = self.get_live_credentials()
+                logs = fetch_recent_sell_logs(live_uid, live_tk, minutes=minutes, token_type=live_tk_type)
                 build_json(self, 200, ok({
                     'minutes': minutes,
                     'logs': logs,
@@ -855,6 +970,40 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 build_json(self, 500, {'ok': False, 'message': f'读取游戏凭证失败: {exc}'})
             return
 
+        if parsed.path == '/api/manage/token-config/qr-status':
+            if not self.ensure_admin():
+                return
+            session_id = params.get('session', [None])[0]
+            if not session_id:
+                build_json(self, 400, {'ok': False, 'message': '缺少 session 参数'})
+                return
+            with _QR_LOCK:
+                sess = _QR_SESSIONS.get(session_id)
+            if not sess:
+                build_json(self, 404, {'ok': False, 'message': '会话不存在或已过期'})
+                return
+            status = sess.get('status', 'waiting')
+            if status == 'success':
+                # 自动保存到 DB
+                try:
+                    with get_connection(autocommit=False) as conn:
+                        cfg = save_game_config(conn, sess['userId'], sess['token'], token_type='cw')
+                        conn.commit()
+                    with _QR_LOCK:
+                        _QR_SESSIONS.pop(session_id, None)
+                    build_json(self, 200, ok({**cfg, 'autoSaved': True}, '扫码登录成功，凭证已自动保存'))
+                except Exception as exc:
+                    build_json(self, 500, {'ok': False, 'message': f'保存凭证失败: {exc}'})
+            elif status == 'error':
+                build_json(self, 200, {'ok': False, 'status': 'error', 'message': sess.get('error', '登录失败')})
+            elif status == 'timeout':
+                with _QR_LOCK:
+                    _QR_SESSIONS.pop(session_id, None)
+                build_json(self, 200, {'ok': False, 'status': 'timeout', 'message': '二维码已过期'})
+            else:
+                build_json(self, 200, ok({'status': 'waiting'}, '等待扫码'))
+            return
+
         if parsed.path == '/api/manage/community':
             if not self.ensure_admin():
                 return
@@ -1143,7 +1292,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                         }, '该订单已校验成功'))
                         return
 
-                    live_uid, live_tk = get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
+                    live_uid, live_tk, live_tk_type = get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
                     result = verify_recent_recharge(
                         live_uid,
                         live_tk,
@@ -1151,6 +1300,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                         verify_code=verify_code,
                         created_after_ms=order_row['created_at_ms'],
                         expire_minutes=expire_minutes,
+                        token_type=live_tk_type,
                     )
                     if not result.get('ok'):
                         conn.commit()
@@ -1330,16 +1480,47 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
         if parsed.path == '/api/manage/token-config':
             new_user_id = str(payload.get('userId') or payload.get('user_id') or '').strip()
             new_token = str(payload.get('token') or '').strip()
+            new_token_type = str(payload.get('tokenType') or payload.get('token_type') or 'fks').strip().lower()
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = save_game_config(conn, new_user_id, new_token)
+                    data = save_game_config(conn, new_user_id, new_token, token_type=new_token_type)
                     conn.commit()
-                logger.info(f'[admin] 游戏凭证已更新 userId={new_user_id}')
+                logger.info(f'[admin] 游戏凭证已更新 userId={new_user_id} tokenType={new_token_type}')
                 build_json(self, 200, ok(data, '游戏凭证已更新，立即生效无需重启'))
             except ValueError as exc:
                 build_json(self, 200, {'ok': False, 'message': str(exc)})
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'保存游戏凭证失败: {exc}'})
+            return
+
+        if parsed.path == '/api/manage/token-config/qr-start':
+            if not self.ensure_admin():
+                return
+            try:
+                q_uuid = _qr_fetch_uuid()
+                img_bytes = _qr_fetch_image(q_uuid)
+                img_b64 = base64.b64encode(img_bytes).decode()
+                session_id = secrets.token_urlsafe(16)
+                expires_at = time.time() + _QR_SESSION_TTL
+                with _QR_LOCK:
+                    # 清理过期会话
+                    now_ts = time.time()
+                    for sid in list(_QR_SESSIONS.keys()):
+                        if _QR_SESSIONS[sid].get('expires_at', 0) < now_ts:
+                            _QR_SESSIONS.pop(sid, None)
+                    _QR_SESSIONS[session_id] = {
+                        'status': 'waiting',
+                        'qrUuid': q_uuid,
+                        'expires_at': expires_at,
+                    }
+                threading.Thread(target=_qr_poll_and_login, args=(session_id, q_uuid), daemon=True).start()
+                build_json(self, 200, ok({
+                    'sessionId': session_id,
+                    'qrImage': f'data:image/jpeg;base64,{img_b64}',
+                    'expiresIn': _QR_SESSION_TTL,
+                }, '二维码已生成'))
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'生成二维码失败: {exc}'})
             return
 
         if parsed.path == '/api/manage/community':

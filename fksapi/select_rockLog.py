@@ -21,6 +21,14 @@ version = "6.1.8"
 channel = "90033"
 KEY = "BHbE9oCgl58NUz5oJVDUFMLJO9vGQnvdv0Lem3315wQG8laB4dGcxIXFLfDsInHTa"
 
+# User-Agent 按账号类型区分；token_type='cw' 时使用潮玩宇宙 UA，否则使用方块兽 UA
+FKS_USER_AGENT = f"{packageId}/{version}-{channel} Dalvik/2.1.0 (Linux; U; Android 12; BVL-AN16 Build/68e417b.1)"
+CW_USER_AGENT = "com.caike.lomo/4.3.5 (Linux; U; Android 12; zh-cn) (official; 403005)"
+
+
+def _get_user_agent(token_type: str = 'fks') -> str:
+    return CW_USER_AGENT if str(token_type or 'fks').lower() == 'cw' else FKS_USER_AGENT
+
 mysession = requests.session()
 _token_expired_notified = False
 _token_expired_lock = threading.Lock()
@@ -38,10 +46,10 @@ def generate_hmac_sha256(key, message):
     return hmac.new(key.encode(), message.encode(), hashlib.sha256).hexdigest()
 
 
-def _build_common_headers(uid, tk, ts, sign, content_type=None):
+def _build_common_headers(uid, tk, ts, sign, content_type=None, user_agent=None):
     headers = {
         "Host": "fks-api.lucklyworld.com",
-        "User-Agent": f"{packageId}/{version}-{channel} Dalvik/2.1.0 (Linux; U; Android 12; BVL-AN16 Build/68e417b.1)",
+        "User-Agent": user_agent or FKS_USER_AGENT,
         "packageId": packageId,
         "version": version,
         "channel": channel,
@@ -75,7 +83,7 @@ def check_token_valid(response_dict, uid):
     return True
 
 
-def _make_api_request(uid, tk, path, data=None, content_type="application/x-www-form-urlencoded", timeout=2.5):
+def _make_api_request(uid, tk, path, data=None, content_type="application/x-www-form-urlencoded", timeout=2.5, token_type='fks'):
     parameter = f"uid={uid}&version={version}"
     ts = str(round(time.time() * 1000))
     body_md5 = ""
@@ -94,7 +102,7 @@ def _make_api_request(uid, tk, path, data=None, content_type="application/x-www-
     )
     get_sign = generate_hmac_sha256(KEY, mes)
     url = f"https://fks-api.lucklyworld.com{path}?{parameter}"
-    headers = _build_common_headers(uid, tk, ts, get_sign, content_type)
+    headers = _build_common_headers(uid, tk, ts, get_sign, content_type, user_agent=_get_user_agent(token_type))
     try:
         if data:
             response = mysession.post(
@@ -118,11 +126,11 @@ def _make_api_request(uid, tk, path, data=None, content_type="application/x-www-
         return None
 
 
-def fetch_all_logs(uid, tk):
+def fetch_all_logs(uid, tk, token_type='fks'):
     page = 1
     out = []
     while True:
-        resp = _make_api_request(uid, tk, PATH, data={"page": page}, timeout=10)
+        resp = _make_api_request(uid, tk, PATH, data={"page": page}, timeout=10, token_type=token_type)
         if not resp:
             break
         rows = resp.get("list") or []
@@ -175,17 +183,17 @@ def enrich_logs(rows, now=None):
     return enriched
 
 
-def fetch_sell_logs(uid, tk):
-    all_rows = fetch_all_logs(uid, tk)
+def fetch_sell_logs(uid, tk, token_type='fks'):
+    all_rows = fetch_all_logs(uid, tk, token_type=token_type)
     return [row for row in all_rows if row.get("type") == TYPE_SELL]
 
 
-def fetch_recent_sell_logs(uid, tk, minutes=DEFAULT_VERIFY_MINUTES, now=None):
+def fetch_recent_sell_logs(uid, tk, minutes=DEFAULT_VERIFY_MINUTES, now=None, token_type='fks'):
     now_dt = now or datetime.now()
     threshold = now_dt - timedelta(minutes=minutes)
     recent_logs = []
 
-    for row in enrich_logs(fetch_sell_logs(uid, tk), now_dt):
+    for row in enrich_logs(fetch_sell_logs(uid, tk, token_type=token_type), now_dt):
         log_ts = row.get("timestamp") or 0
         if not log_ts:
             continue
@@ -197,14 +205,14 @@ def fetch_recent_sell_logs(uid, tk, minutes=DEFAULT_VERIFY_MINUTES, now=None):
     return recent_logs
 
 
-def verify_recent_recharge(uid, tk, amount, verify_code, created_after_ms=None, expire_minutes=DEFAULT_VERIFY_MINUTES, now=None):
+def verify_recent_recharge(uid, tk, amount, verify_code, created_after_ms=None, expire_minutes=DEFAULT_VERIFY_MINUTES, now=None, token_type='fks'):
     now_dt = now or datetime.now()
     amount_text = normalize_amount(amount)
     verify_code = str(verify_code).strip()
     lower_bound = int(created_after_ms) if created_after_ms else 0
     upper_bound = int(now_dt.timestamp() * 1000)
 
-    recent_logs = fetch_recent_sell_logs(uid, tk, minutes=expire_minutes, now=now_dt)
+    recent_logs = fetch_recent_sell_logs(uid, tk, minutes=expire_minutes, now=now_dt, token_type=token_type)
     matched = None
 
     for row in recent_logs:

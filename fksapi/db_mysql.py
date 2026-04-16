@@ -4253,11 +4253,14 @@ def _parse_jwt_exp(token_str):
         return 0
 
 
-def build_game_config_payload(conn, env_user_id='', env_token=''):
+def build_game_config_payload(conn, env_user_id='', env_token='', env_token_type='fks'):
     """读取游戏凭证配置，DB 优先，无则降级到环境变量。"""
     stored, row = load_app_config_json(conn, GAME_CREDENTIALS_CONFIG_KEY, default={})
     user_id = str(stored.get('userId') or env_user_id or '').strip()
     token = str(stored.get('token') or env_token or '').strip()
+    token_type = str(stored.get('tokenType') or env_token_type or 'fks').strip().lower()
+    if token_type not in ('fks', 'cw'):
+        token_type = 'fks'
     exp_ts = _parse_jwt_exp(token)
     now_ts = int(time.time())
     days_left = max(0, round((exp_ts - now_ts) / 86400, 1)) if exp_ts else None
@@ -4266,6 +4269,7 @@ def build_game_config_payload(conn, env_user_id='', env_token=''):
         'userId': user_id,
         'tokenPreview': (token[:12] + '…' + token[-6:]) if len(token) > 20 else token,
         'tokenFull': token,
+        'tokenType': token_type,
         'expTimestamp': exp_ts,
         'expText': format_dt(datetime.fromtimestamp(exp_ts)) if exp_ts else '未知',
         'daysLeft': days_left,
@@ -4275,10 +4279,13 @@ def build_game_config_payload(conn, env_user_id='', env_token=''):
     }
 
 
-def save_game_config(conn, user_id, token):
+def save_game_config(conn, user_id, token, token_type='fks'):
     """保存游戏凭证到 DB，立即对后续请求生效（无需重启）。"""
     user_id = str(user_id or '').strip()
     token = str(token or '').strip()
+    token_type = str(token_type or 'fks').strip().lower()
+    if token_type not in ('fks', 'cw'):
+        token_type = 'fks'
     if not user_id:
         raise ValueError('userId 不能为空')
     if not token:
@@ -4286,8 +4293,9 @@ def save_game_config(conn, user_id, token):
     save_app_config_json(conn, GAME_CREDENTIALS_CONFIG_KEY, {
         'userId': user_id,
         'token': token,
+        'tokenType': token_type,
     })
-    return build_game_config_payload(conn, env_user_id=user_id, env_token=token)
+    return build_game_config_payload(conn, env_user_id=user_id, env_token=token, env_token_type=token_type)
 
 
 def get_live_game_credentials(conn, env_user_id='', env_token=''):
@@ -4295,7 +4303,8 @@ def get_live_game_credentials(conn, env_user_id='', env_token=''):
     stored, _ = load_app_config_json(conn, GAME_CREDENTIALS_CONFIG_KEY, default={})
     user_id = str(stored.get('userId') or env_user_id or '').strip()
     token = str(stored.get('token') or env_token or '').strip()
-    return user_id, token
+    token_type = str(stored.get('tokenType') or 'fks').strip().lower()
+    return user_id, token, token_type
 
 
 # ── 社区名流 CRUD ────────────────────────────────────────────────
