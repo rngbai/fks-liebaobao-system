@@ -3338,16 +3338,14 @@ def build_promotion_payload(conn, user_row, limit=20):
     effective_invited_count = int(invited_row.get('effective_invited_count') or 0)
     reward_amount = int(reward_row.get('reward_amount') or 0)
     reward_count = int(reward_row.get('reward_count') or 0)
-    rules = []
-    for idx, rule in enumerate(PROMOTION_RULES):
-        threshold = int(rule.get('threshold') or 0)
-        next_threshold = int(PROMOTION_RULES[idx + 1].get('threshold') or 0) if idx + 1 < len(PROMOTION_RULES) else 0
-        rules.append({
-            'min': threshold,
-            'max': next_threshold - 1 if next_threshold > threshold else None,
-            'reward': int(rule.get('reward') or 0),
-            'label': str(rule.get('label') or f'达到 {threshold} 位有效推荐').strip(),
-        })
+    rules = [
+        {'label': '一级分佣（直接邀请）', 'rewardDesc': '每单 +0.8 宝石'},
+        {'label': '二级分佣（间接邀请）', 'rewardDesc': '每单 +0.2 宝石'},
+        {'label': '新人首单奖励',         'rewardDesc': f'邀请人完成首单 +{PROMO_FIRST_ORDER_BONUS} 宝石'},
+        {'label': '月度阶梯（≥30单）',   'rewardDesc': '每单额外 +0.2 宝石，月末结算'},
+        {'label': '月度阶梯（≥100单）',  'rewardDesc': '每单额外 +0.3 宝石，月末结算'},
+        {'label': '全月 Top5',            'rewardDesc': '50/30/20/10/5 宝石，月末结算'},
+    ]
     return {
         'user': serialize_user(latest_user),
         'promotion': {
@@ -3590,12 +3588,12 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
             'conversionRate': round((effective_total * 100 / invitee_total), 1) if invitee_total else 0,
         },
         'rules': [
-            {
-                'threshold': int(rule.get('threshold') or 0),
-                'reward': int(rule.get('reward') or 0),
-                'label': str(rule.get('label') or '').strip(),
-            }
-            for rule in PROMOTION_RULES
+            {'label': '一级分佣（直接邀请）', 'rewardDesc': '每单 +0.8 宝石'},
+            {'label': '二级分佣（间接邀请）', 'rewardDesc': '每单 +0.2 宝石'},
+            {'label': '新人首单奖励',         'rewardDesc': f'邀请人完成首单 +{PROMO_FIRST_ORDER_BONUS} 宝石'},
+            {'label': '月度阶梯（≥30单）',   'rewardDesc': '每单额外 +0.2 宝石，月末结算'},
+            {'label': '月度阶梯（≥100单）',  'rewardDesc': '每单额外 +0.3 宝石，月末结算'},
+            {'label': '全月 Top5',            'rewardDesc': '50/30/20/10/5 宝石，月末结算'},
         ],
         'pagination': {
             'page': page,
