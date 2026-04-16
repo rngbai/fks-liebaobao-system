@@ -581,9 +581,10 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
         with get_connection(autocommit=False) as conn:
             user_row, wallet_row = get_or_create_user(conn, user_key, profile)
-            data = build_recharge_state(conn, user_row, wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+            data = self.build_live_recharge_state(conn, user_row, wallet_row)
             conn.commit()
             return data
+
 
     def get_user_profile_payload(self, user_key, profile=None):
         with get_connection(autocommit=False) as conn:
@@ -660,13 +661,20 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             return payload
 
     def get_live_credentials(self, conn=None):
-        """从 DB 读当前游戏凭证，返回 (uid, tk, token_type)，优先 DB，降级到启动时环境变量。"""
+        """从 DB 读当前游戏凭证，返回 (uid, tk, token_type, user_name)，优先 DB，降级到启动时环境变量。"""
         if conn is not None:
-            return get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
+            return get_live_game_credentials(conn, RECEIVER_BEAST_ID, token, env_user_name=RECEIVER_BEAST_NICK)
         with get_connection(autocommit=False) as c:
-            uid, tk, token_type = get_live_game_credentials(c, RECEIVER_BEAST_ID, token)
+            uid, tk, token_type, user_name = get_live_game_credentials(c, RECEIVER_BEAST_ID, token, env_user_name=RECEIVER_BEAST_NICK)
             c.commit()
-        return uid, tk, token_type
+        return uid, tk, token_type, user_name
+
+    def build_live_recharge_state(self, conn, user_row, wallet_row):
+        live_uid, _, _, live_user_name = self.get_live_credentials(conn)
+        receiver_beast_id = str(live_uid or RECEIVER_BEAST_ID).strip()
+        receiver_beast_nick = str(live_user_name or RECEIVER_BEAST_NICK).strip()
+        return build_recharge_state(conn, user_row, wallet_row, receiver_beast_id, receiver_beast_nick)
+
 
     def do_GET(self):
 
@@ -1031,7 +1039,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 return
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = build_game_config_payload(conn, RECEIVER_BEAST_ID, token)
+                    data = build_game_config_payload(conn, RECEIVER_BEAST_ID, token, env_user_name=RECEIVER_BEAST_NICK)
                     conn.commit()
                 build_json(self, 200, ok(data, '查询成功'))
             except Exception as exc:
@@ -1043,7 +1051,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 return
             try:
                 with get_connection(autocommit=False) as conn:
-                    uid, tk, tk_type = get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
+                    uid, tk, tk_type, user_name = self.get_live_credentials(conn)
                     conn.commit()
                 if not uid or not tk:
                     build_json(self, 200, {'ok': False, 'message': '游戏凭证未配置，请先在 Token 管理中设置'})
@@ -1055,12 +1063,14 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 build_json(self, 200, ok({
                     'balance': balance,
                     'userId': uid,
+                    'userName': user_name,
                     'tokenType': tk_type,
                     'cached': False,
                 }, f'宝石余额查询成功：{balance}'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'查询余额失败: {exc}'})
             return
+
 
         if parsed.path == '/api/manage/token-config/qr-status':
             if not self.ensure_admin():
@@ -1297,8 +1307,6 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
             amount = to_int(payload.get('amount'), 0)
 
-            beast_id = str(payload.get('beast_id') or RECEIVER_BEAST_ID)
-            beast_nick = str(payload.get('beast_nick') or RECEIVER_BEAST_NICK)
             if amount <= 0:
                 status, body = fail('请输入正确的转入数量')
                 build_json(self, status, body)
@@ -1306,9 +1314,12 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             try:
                 with get_connection(autocommit=False) as conn:
                     user_row, wallet_row = get_or_create_user(conn, user_key, profile)
+                    live_uid, _, _, live_user_name = self.get_live_credentials(conn)
+                    beast_id = str(live_uid or payload.get('beast_id') or RECEIVER_BEAST_ID).strip()
+                    beast_nick = str(live_user_name or payload.get('beast_nick') or RECEIVER_BEAST_NICK).strip()
                     create_recharge_order(conn, user_row, amount, beast_id, beast_nick)
                     updated_wallet_row = wallet_row
-                    data = build_recharge_state(conn, user_row, updated_wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+                    data = self.build_live_recharge_state(conn, user_row, updated_wallet_row)
                     conn.commit()
                 build_json(self, 200, ok(data, '订单已创建'))
             except PermissionError as exc:
@@ -1328,7 +1339,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 with get_connection(autocommit=False) as conn:
                     user_row, wallet_row = get_or_create_user(conn, user_key, profile)
                     cancel_recharge_order(conn, user_row, order_id)
-                    data = build_recharge_state(conn, user_row, wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+                    data = self.build_live_recharge_state(conn, user_row, wallet_row)
                     conn.commit()
                 build_json(self, 200, ok(data, '订单已取消'))
             except Exception as exc:
@@ -1364,14 +1375,14 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                             "UPDATE recharge_orders SET status='expired', updated_at=CURRENT_TIMESTAMP WHERE id=%s AND user_id=%s AND status='pending'",
                             (order_id, user_row['id'])
                         )
-                        data = build_recharge_state(conn, user_row, wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+                        data = self.build_live_recharge_state(conn, user_row, wallet_row)
                         conn.commit()
                         status, body = fail('订单已超时失效', data=data)
                         build_json(self, status, body)
                         return
 
                     if order_row.get('status') == 'success':
-                        data = build_recharge_state(conn, user_row, wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+                        data = self.build_live_recharge_state(conn, user_row, wallet_row)
                         matched = {
                             'datetime': order_row.get('matched_datetime') or '',
                             'timestamp': int(order_row.get('matched_timestamp') or 0),
@@ -1384,7 +1395,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                         }, '该订单已校验成功'))
                         return
 
-                    live_uid, live_tk, live_tk_type = get_live_game_credentials(conn, RECEIVER_BEAST_ID, token)
+                    live_uid, live_tk, live_tk_type, _ = self.get_live_credentials(conn)
                     result = verify_recent_recharge(
                         live_uid,
                         live_tk,
@@ -1403,7 +1414,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                     matched_log = result.get('matched') or {}
                     new_balance = mark_recharge_success(conn, user_row, order_row, matched_log, verify_code)
                     wallet_row['gem_balance'] = new_balance
-                    data = build_recharge_state(conn, user_row, wallet_row, RECEIVER_BEAST_ID, RECEIVER_BEAST_NICK)
+                    data = self.build_live_recharge_state(conn, user_row, wallet_row)
                     conn.commit()
                     build_json(self, 200, ok({
                         **data,
@@ -1415,6 +1426,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'校验失败: {exc}'})
             return
+
 
         if parsed.path == '/api/guarantee/create':
             gem_amount = to_int(payload.get('gem_amount') or payload.get('amount'), 0)
@@ -1571,19 +1583,21 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
         if parsed.path == '/api/manage/token-config':
             new_user_id = str(payload.get('userId') or payload.get('user_id') or '').strip()
+            new_user_name = str(payload.get('userName') or payload.get('user_name') or '').strip()
             new_token = str(payload.get('token') or '').strip()
             new_token_type = str(payload.get('tokenType') or payload.get('token_type') or 'fks').strip().lower()
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = save_game_config(conn, new_user_id, new_token, token_type=new_token_type)
+                    data = save_game_config(conn, new_user_id, new_token, token_type=new_token_type, user_name=new_user_name)
                     conn.commit()
-                logger.info(f'[admin] 游戏凭证已更新 userId={new_user_id} tokenType={new_token_type}')
+                logger.info(f'[admin] 游戏凭证已更新 userId={new_user_id} userName={new_user_name or "-"} tokenType={new_token_type}')
                 build_json(self, 200, ok(data, '游戏凭证已更新，立即生效无需重启'))
             except ValueError as exc:
                 build_json(self, 200, {'ok': False, 'message': str(exc)})
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'保存游戏凭证失败: {exc}'})
             return
+
 
         if parsed.path == '/api/manage/token-config/qr-start':
             if not self.ensure_admin():

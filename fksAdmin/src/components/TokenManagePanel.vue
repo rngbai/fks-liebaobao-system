@@ -1,6 +1,7 @@
 <script setup>
 import { onMounted, reactive, ref, computed, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 import { api } from '../lib/api'
 
 const emit = defineEmits(['count-change'])
@@ -8,6 +9,7 @@ const emit = defineEmits(['count-change'])
 // ── 当前凭证状态 ──────────────────────────────
 const config = reactive({
   userId: '',
+  userName: '',
   tokenPreview: '',
   tokenType: 'fks',
   expText: '',
@@ -21,7 +23,7 @@ const saving = ref(false)
 
 // ── 手动编辑表单 ──────────────────────────────
 const formVisible = ref(false)
-const form = reactive({ userId: '', token: '', tokenType: 'fks' })
+const form = reactive({ userId: '', userName: '', token: '', tokenType: 'fks' })
 const showFullToken = ref(false)
 
 // ── 扫码登录 ──────────────────────────────────
@@ -53,6 +55,13 @@ const urgencyAlert = computed(() => {
   if (config.daysLeft !== null && config.daysLeft <= 3) return { type: 'warning', text: `Token 即将在 ${config.daysLeft} 天后过期，请提前更新以避免充值校验中断。` }
   return null
 })
+const userNameAlert = computed(() => {
+  if (config.userName) return null
+  return {
+    type: 'warning',
+    text: '未设置用户名称 / 方块昵称。小程序“转入宝石”页会读取这里的名称，若与实际收款账号不一致，用户可能无法按正确昵称完成转入。',
+  }
+})
 
 // ── 数据加载 ──────────────────────────────────
 async function loadConfig() {
@@ -71,6 +80,7 @@ async function loadConfig() {
 // ── 手动编辑 ──────────────────────────────────
 function openForm() {
   form.userId = config.userId || ''
+  form.userName = config.userName || ''
   form.token = ''
   form.tokenType = config.tokenType || 'fks'
   showFullToken.value = false
@@ -80,11 +90,13 @@ function openForm() {
 function closeForm() {
   formVisible.value = false
   form.userId = ''
+  form.userName = ''
   form.token = ''
 }
 
 async function saveConfig() {
   if (!form.userId.trim()) { ElMessage.warning('请输入游戏 userId'); return }
+  if (!form.userName.trim()) { ElMessage.warning('请输入用户名称 / 方块昵称'); return }
   if (!form.token.trim()) { ElMessage.warning('请粘贴新的 Token'); return }
   try {
     await ElMessageBox.confirm(
@@ -98,6 +110,7 @@ async function saveConfig() {
   try {
     const data = await api.post('/api/manage/token-config', {
       userId: form.userId.trim(),
+      userName: form.userName.trim(),
       token: form.token.trim(),
       tokenType: form.tokenType,
     })
@@ -162,7 +175,11 @@ async function pollQrStatus() {
       qrStatus.value = 'success'
       Object.assign(config, data)
       emit('count-change', config.isExpired ? 1 : 0)
-      ElMessage.success('潮玩宇宙扫码登录成功，凭证已自动保存！')
+      if (data.userName) {
+        ElMessage.success('潮玩宇宙扫码登录成功，凭证已自动保存！')
+      } else {
+        ElMessage.warning('潮玩宇宙扫码登录成功，但请手动补充用户名称，确保小程序收款昵称一致。')
+      }
       setTimeout(closeQr, 2000)
     } else if (data.status === 'timeout') {
       qrStatus.value = 'timeout'
@@ -202,6 +219,14 @@ onUnmounted(stopQrPolling)
       :closable="false"
       class="urgency-banner"
     />
+    <el-alert
+      v-if="userNameAlert"
+      :title="userNameAlert.text"
+      :type="userNameAlert.type"
+      show-icon
+      :closable="false"
+      class="urgency-banner"
+    />
 
     <!-- 主状态卡片 -->
     <el-card shadow="never" class="status-card">
@@ -230,6 +255,11 @@ onUnmounted(stopQrPolling)
             <span class="mono">{{ config.userId || '未设置' }}</span>
             <el-button v-if="config.userId" link type="primary" size="small" @click="copyUserId">复制</el-button>
           </div>
+        </el-descriptions-item>
+
+        <el-descriptions-item label="用户名称 / 方块昵称">
+          <span>{{ config.userName || '未设置' }}</span>
+          <span class="type-hint">（小程序转入页展示的收款昵称以这里为准）</span>
         </el-descriptions-item>
 
         <el-descriptions-item label="账号类型">
@@ -306,6 +336,10 @@ onUnmounted(stopQrPolling)
           <el-form-item label="游戏 userId" required>
             <el-input v-model="form.userId" placeholder="如 9100503" clearable />
             <div class="form-help">通常是固定数字，一般不需要修改</div>
+          </el-form-item>
+          <el-form-item label="用户名称 / 方块昵称" required>
+            <el-input v-model="form.userName" placeholder="如 面板小助手" clearable />
+            <div class="form-help">小程序“转入宝石”页会直接展示这里的名称，必须和实际收款账号保持一致</div>
           </el-form-item>
           <el-form-item label="新的 Token" required>
             <el-input
