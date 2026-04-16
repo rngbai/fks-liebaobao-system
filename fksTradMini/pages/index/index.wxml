@@ -1,0 +1,175 @@
+<view class="page">
+  <view class="hero-wrap">
+    <swiper
+      class="hero-swiper"
+      autoplay
+      circular
+      interval="4200"
+      duration="450"
+      indicator-dots
+      indicator-color="rgba(91,110,245,0.24)"
+      indicator-active-color="#5B6EF5"
+    >
+      <swiper-item wx:for="{{topBanners}}" wx:key="id">
+        <view class="hero-ad-card" style="background: {{item.gradient}}" bindtap="handleTopBannerTap" data-id="{{item.id}}">
+          <view class="hero-ad-main">
+            <text class="hero-ad-label">{{item.label}}</text>
+            <text class="hero-ad-title">{{item.title}}</text>
+            <text class="hero-ad-desc">{{item.desc}}</text>
+            <view class="hero-ad-footer">
+              <text class="hero-ad-brand">{{item.brand}}</text>
+              <text class="hero-ad-cta">{{item.cta}}</text>
+            </view>
+          </view>
+
+          <view class="hero-ad-visual">
+            <view class="hero-ad-screen">
+              <text class="hero-ad-screen-title">{{item.visualTitle}}</text>
+              <text class="hero-ad-screen-tag">{{item.visualTag}}</text>
+            </view>
+            <view class="hero-ad-balance">
+              <image class="hero-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+              <text class="hero-balance-num">{{gemBalance}}</text>
+            </view>
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+
+  <view class="pending-card" wx:if="{{pendingSummary.total > 0}}" bindtap="handlePendingTap">
+    <view class="pending-card-head">
+      <text class="pending-card-title">📋 你有 {{pendingSummary.total}} 项待处理</text>
+      <text class="pending-card-arrow">查看 ›</text>
+    </view>
+    <view class="pending-tags">
+      <text class="pending-tag" wx:if="{{pendingSummary.pendingConfirm > 0}}">{{pendingSummary.pendingConfirm}} 笔待确认</text>
+      <text class="pending-tag" wx:if="{{pendingSummary.waitingSeller > 0}}">{{pendingSummary.waitingSeller}} 笔等卖家</text>
+      <text class="pending-tag" wx:if="{{pendingSummary.pendingMatch > 0}}">{{pendingSummary.pendingMatch}} 笔待匹配</text>
+      <text class="pending-tag" wx:if="{{pendingSummary.pendingTransfer > 0}}">{{pendingSummary.pendingTransfer}} 笔转出中</text>
+      <text class="pending-tag pending-tag-msg" wx:if="{{pendingSummary.unreadMessages > 0}}">{{pendingSummary.unreadMessages}} 条未读</text>
+    </view>
+  </view>
+
+  <view class="quick-nav-wrap">
+    <view class="section-head compact">
+      <view>
+        <text class="section-title">常用入口</text>
+      </view>
+    </view>
+    <view class="quick-grid">
+      <view
+        class="quick-item {{item.highlight ? 'quick-item-highlight' : ''}}"
+        wx:for="{{quickEntries}}"
+        wx:key="id"
+        bindtap="handleQuickEntryTap"
+        data-id="{{item.id}}"
+      >
+        <view class="quick-icon-wrap">
+          <image wx:if="{{item.iconType === 'image'}}" class="quick-icon-image" src="{{item.icon}}" mode="aspectFit"/>
+          <text wx:else class="quick-icon">{{item.icon}}</text>
+        </view>
+        <text class="quick-title">{{item.title}}</text>
+        <text class="quick-desc">{{item.desc}}</text>
+      </view>
+
+    </view>
+  </view>
+
+  <view class="notice-card">
+    <text class="notice-label">平台快报</text>
+    <text class="notice-text">{{hotNotice}}</text>
+  </view>
+
+  <view class="section-wrap banner-wrap">
+    <view class="section-head">
+      <view>
+        <text class="section-title">活动推荐</text>
+      </view>
+      <text class="section-link" bindtap="goGroupDetail">加群说明</text>
+    </view>
+
+    <swiper class="promo-swiper" autoplay circular interval="3600" indicator-dots indicator-color="rgba(255,255,255,0.35)" indicator-active-color="#ffffff">
+      <swiper-item wx:for="{{bannerCards}}" wx:key="id">
+        <view class="promo-card" style="background: {{item.gradient}}" bindtap="handleBannerTap" data-id="{{item.id}}">
+          <view class="promo-card-inner">
+            <view class="promo-meta-row">
+              <text class="promo-badge">{{item.badge}}</text>
+              <text class="promo-action">{{item.accent}} →</text>
+            </view>
+            <text class="promo-title">{{item.title}}</text>
+            <text class="promo-subtitle">{{item.subtitle}}</text>
+            <view class="promo-bottom-row">
+              <view class="promo-dot"></view>
+              <text class="promo-bottom-text">点击卡片进入详情页</text>
+            </view>
+          </view>
+        </view>
+      </swiper-item>
+    </swiper>
+  </view>
+
+  <view class="section-wrap service-wrap">
+    <view class="section-head compact">
+      <view>
+        <text class="section-title">热门操作</text>
+      </view>
+    </view>
+    <view class="service-list">
+      <view class="service-card" wx:for="{{serviceCards}}" wx:key="id" bindtap="handleServiceTap" data-id="{{item.id}}">
+        <view class="service-icon">{{item.icon}}</view>
+        <view class="service-main">
+          <text class="service-title">{{item.title}}</text>
+          <text class="service-desc">{{item.desc}}</text>
+        </view>
+        <text class="service-btn">{{item.actionText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-wrap rank-wrap">
+    <view class="section-head">
+      <view>
+        <text class="section-title">榜单中心</text>
+      </view>
+      <text class="section-link" bindtap="goRankPage">查看完整排行</text>
+    </view>
+
+    <view class="rank-highlight" bindtap="goRankPage">
+      <view>
+        <text class="rank-highlight-title">🏆 排行榜</text>
+        <text class="rank-highlight-desc">担保达人榜 / 推荐贡献榜</text>
+      </view>
+      <text class="rank-highlight-arrow">›</text>
+    </view>
+
+    <view class="rank-preview-list" wx:if="{{rankPreview.length > 0}}">
+      <view class="rank-preview-item" wx:for="{{rankPreview}}" wx:key="id">
+        <view class="rank-medal rank-medal-{{index + 1}}">{{item.rankNo}}</view>
+        <view class="rank-user">
+          <text class="rank-user-name">{{item.nickname}}</text>
+          <text class="rank-user-tag">{{item.tag}}</text>
+        </view>
+        <view class="rank-score">
+          <text class="rank-score-main">{{item.scoreText}}</text>
+          <text class="rank-score-sub">奖励 {{item.rewardText}}</text>
+        </view>
+      </view>
+    </view>
+    <view class="rank-empty" wx:else>
+      <text class="rank-empty-text">暂无排行数据，快去完成担保交易上榜吧</text>
+    </view>
+  </view>
+
+  <view class="group-entry-card" bindtap="goGroupDetail">
+    <view class="group-entry-main">
+      <text class="group-entry-title">加入官方交流QQ群</text>
+      <text class="group-entry-sub">群号 {{officialGroup.qq}} · 点击进入详情页查看说明并复制</text>
+    </view>
+    <view class="group-entry-btn" catchtap="copyGroupQQ">复制群号</view>
+  </view>
+
+  <view class="footer-note">本平台为方块兽玩家提供担保、转入与行情交流入口，社群群号固定为 {{officialGroup.qq}}。</view>
+
+</view>

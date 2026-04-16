@@ -1,0 +1,36 @@
+<view class="page">
+  <view class="hero-card">
+    <text class="hero-kicker">OFFICIAL QQ GROUP</text>
+    <text class="hero-title">加入官方交流群，少踩坑</text>
+    <text class="hero-desc">交易经验、担保玩法、转入校验和活动情报都放在群里同步，点下面按钮就能复制群号。</text>
+  </view>
+
+
+  <view class="group-number-card">
+    <text class="group-number-label">官方群号</text>
+    <text class="group-number">{{groupQQ}}</text>
+    <text class="group-number-tip">点击按钮复制后，去 QQ 搜索群号申请加入</text>
+    <view class="primary-btn" bindtap="copyGroupQQ">复制群号并前往 QQ</view>
+  </view>
+
+  <block wx:for="{{detailBlocks}}" wx:key="title">
+    <view class="detail-card">
+      <text class="detail-title">{{item.title}}</text>
+      <view class="detail-item" wx:for="{{item.items}}" wx:key="*this">
+        <text class="detail-bullet">•</text>
+        <text class="detail-text">{{item}}</text>
+      </view>
+    </view>
+  </block>
+
+  <view class="safe-card">
+    <text class="safe-title">⚠️ 重要提醒</text>
+    <text class="safe-text">群内仅做交流和信息分享，任何私下交易都请谨慎甄别；如涉及担保、转入、买卖，优先走平台内流程。</text>
+  </view>
+
+
+  <view class="footer-actions">
+    <view class="primary-btn" bindtap="copyGroupQQ">加入群聊</view>
+    <view class="ghost-btn" bindtap="goBack">返回首页</view>
+  </view>
+</view>

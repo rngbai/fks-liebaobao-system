@@ -1,0 +1,146 @@
+<!-- 我的 -->
+<view class="container">
+
+  <view class="user-header">
+    <view class="user-avatar-wrap" bindtap="goProfile">
+      <image class="avatar" src="{{userInfo.avatarUrl || '/assets/default_avatar.png'}}" mode="aspectFill"/>
+      <view class="avatar-edit-badge">编辑</view>
+    </view>
+    <view class="user-info">
+      <text class="nickname">{{userInfo.nickName || '方块兽玩家'}}</text>
+      <text class="user-account">{{userInfo.accountDisplay ? '账号：' + userInfo.accountDisplay : '点击头像设置微信头像与昵称'}}</text>
+      <text class="beast-id">方块兽ID：{{userInfo.beastId || '未绑定'}}</text>
+    </view>
+
+    <view class="setting-btn" bindtap="goProfile">
+      <text class="setting-icon">⚙️</text>
+    </view>
+  </view>
+
+  <view class="gem-card" bindtap="goGems">
+    <view class="gem-card-left">
+      <image class="gem-card-emoji" src="/assets/baoshi.png" mode="aspectFit"/>
+      <view class="gem-card-info">
+        <text class="gem-card-label">我的宝石</text>
+        <text class="gem-card-num">{{gemBalance}}</text>
+        <text class="gem-bind-tip {{gemBindTipClass}}">{{gemBindTipText}}</text>
+
+      </view>
+    </view>
+    <view class="gem-card-right">
+      <view class="gem-action-btn gem-recharge-btn" catchtap="goRecharge">转入</view>
+      <view class="gem-action-btn gem-transfer-btn" catchtap="goTransfer">转出</view>
+      <text class="gem-card-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="stats-row">
+    <view class="stat-item" bindtap="goGuaranteeRecords">
+      <text class="stat-num">{{stats.guaranteeTotal}}</text>
+      <text class="stat-label">总担保</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item" bindtap="goGuaranteeRecords">
+      <text class="stat-num success">{{stats.guaranteeDone}}</text>
+      <text class="stat-label">已完成</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item" bindtap="goRecommend">
+      <text class="stat-num primary">{{stats.recommendCount}}</text>
+      <text class="stat-label">推荐人数</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num gem">{{stats.earnedGem}}</text>
+      <text class="stat-label">累计获益<image class="gem-stat-icon" src="/assets/baoshi.png" mode="aspectFit"/></text>
+    </view>
+  </view>
+
+  <view class="menu-group">
+    <view class="menu-group-title">账户管理</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="goProfile">
+        <view class="menu-icon-wrap mi-blue">
+          <text class="menu-icon">👤</text>
+        </view>
+        <text class="menu-text">个人设置</text>
+        <text class="menu-desc">头像 昵称 手机号 邮箱 密码</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="goGems">
+        <view class="menu-icon-wrap mi-purple">
+          <image class="menu-icon-img" src="/assets/baoshi.png" mode="aspectFit"/>
+        </view>
+        <text class="menu-text">我的宝石</text>
+        <text class="menu-desc">余额 转入 转出 明细</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="goMessages">
+        <view class="menu-icon-wrap mi-green">
+          <text class="menu-icon">📩</text>
+        </view>
+        <text class="menu-text">消息中心</text>
+        <view class="menu-badge" wx:if="{{unreadCount > 0}}">{{unreadCount}}</view>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="menu-group">
+    <view class="menu-group-title">交易功能</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="goGuaranteeRecords">
+
+        <view class="menu-icon-wrap mi-orange">
+          <text class="menu-icon">📊</text>
+        </view>
+        <text class="menu-text">担保记录</text>
+        <text class="menu-desc">查看我的担保订单</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="goAdsInvest">
+        <view class="menu-icon-wrap mi-red">
+          <text class="menu-icon">📢</text>
+        </view>
+        <text class="menu-text">广告投放</text>
+        <text class="menu-desc">在首页横幅投放广告</text>
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="goRecommend">
+        <view class="menu-icon-wrap mi-teal">
+          <text class="menu-icon">🌟</text>
+        </view>
+        <text class="menu-text">推荐分享</text>
+        <text class="menu-desc">推荐好友获取奖励</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="menu-group">
+    <view class="menu-group-title">帮助与支持</view>
+    <view class="menu-list">
+      <view class="menu-item" bindtap="goFeedback">
+        <view class="menu-icon-wrap mi-gray">
+          <text class="menu-icon">💬</text>
+        </view>
+        <text class="menu-text">问题反馈</text>
+        <text class="menu-desc">提交问题并查看处理进度</text>
+
+        <text class="menu-arrow">›</text>
+      </view>
+      <view class="menu-item" bindtap="showDisclaimer">
+        <view class="menu-icon-wrap mi-gray">
+          <text class="menu-icon">📋</text>
+        </view>
+        <text class="menu-text">免责声明</text>
+        <text class="menu-desc">平台规则与声明</text>
+        <text class="menu-arrow">›</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="logout-btn" bindtap="logout">退出登录</view>
+  <text class="version-text">方块兽担保 v1.0.0</text>
+
+</view>

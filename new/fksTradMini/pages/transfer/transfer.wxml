@@ -1,0 +1,142 @@
+<view class="page">
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-kicker">宝石转出</text>
+      <text class="hero-title">转出宝石</text>
+      <text class="hero-desc">{{userInfo.beastId ? '当前绑定方块兽ID：' + userInfo.beastId : '请先绑定方块兽ID，后台会按该ID人工处理转出。'}}</text>
+    </view>
+    <view class="hero-balance-card">
+      <text class="hero-balance-label">可用宝石</text>
+      <view class="hero-balance-row">
+        <image class="hero-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text class="hero-balance-num">{{balance}}</text>
+      </view>
+      <text class="hero-balance-sub">锁定中 {{lockedGems}}</text>
+    </view>
+  </view>
+
+  <view class="bind-card" wx:if="{{!userInfo.beastId}}" bindtap="goProfile">
+    <text class="bind-title">请先绑定方块兽ID</text>
+    <text class="bind-desc">未绑定时无法发起转出申请，点击这里去个人设置补全信息。</text>
+    <text class="bind-btn">去绑定</text>
+  </view>
+
+  <view class="pending-card" wx:if="{{pendingRequest}}">
+    <view class="pending-top">
+      <view>
+        <text class="pending-kicker">当前待处理申请</text>
+        <text class="pending-id">{{pendingRequest.id}}</text>
+      </view>
+      <text class="pending-status">{{pendingRequest.statusText}}</text>
+    </view>
+    <view class="pending-grid">
+      <view class="pending-metric">
+        <text class="pending-metric-label">申请数量</text>
+        <text class="pending-metric-value">{{pendingRequest.requestAmount}}</text>
+      </view>
+      <view class="pending-metric">
+        <text class="pending-metric-label">手续费</text>
+        <text class="pending-metric-value">{{pendingRequest.feeAmount}}</text>
+      </view>
+      <view class="pending-metric">
+        <text class="pending-metric-label">预计实转</text>
+        <text class="pending-metric-value">{{pendingRequest.actualAmount}}</text>
+      </view>
+    </view>
+    <text class="pending-desc">{{pendingRequest.statusDesc}}，后台处理完成后会自动记录到历史中。</text>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <view>
+        <text class="section-kicker">提交申请</text>
+        <text class="section-title">提交转出申请</text>
+      </view>
+      <text class="section-link" bindtap="showTutorial">查看教程</text>
+    </view>
+
+    <view class="profile-tip">
+      <text class="profile-tip-key">当前绑定</text>
+      <text class="profile-tip-val">{{userInfo.nickName || '方块兽玩家'}} / {{userInfo.beastId || '未绑定'}}</text>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label required">转出数量</view>
+      <view class="input-with-unit">
+        <input class="form-input" type="number" placeholder="请输入转出数量" value="{{amount}}" bindinput="onAmountInput" placeholder-style="color:#bbb" />
+        <text class="input-action" bindtap="setMaxAmount">全部</text>
+        <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+      </view>
+    </view>
+
+    <view class="fee-grid">
+      <view class="fee-card">
+        <text class="fee-label">申请数量</text>
+        <text class="fee-value">{{amount || 0}}</text>
+      </view>
+      <view class="fee-card">
+        <text class="fee-label">手续费 {{feeRateText}}</text>
+        <text class="fee-value">{{feeAmount}}</text>
+      </view>
+      <view class="fee-card fee-card-highlight">
+        <text class="fee-label">预计实转</text>
+        <text class="fee-value">{{actualAmount}}</text>
+      </view>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label">备注说明</view>
+      <textarea class="remark-input" placeholder="可填写挂单说明、处理备注等（选填）" value="{{remark}}" bindinput="onRemarkInput" maxlength="60" placeholder-style="color:#bbb"></textarea>
+    </view>
+
+    <view class="submit-btn {{canCreate && amount ? 'btn-primary' : 'btn-disabled'}}" bindtap="submitTransfer">提交转出申请</view>
+    <text class="submit-tip">每日可申请 {{dailyLimit}} 次，今天已申请 {{todayCount}} 次；提交后状态会显示为待处理、拒绝转出或已完成。</text>
+  </view>
+
+  <view class="notice-card">
+    <text class="notice-title">注意事项</text>
+    <text class="notice-item">1. 发起申请后，宝石会先进入锁定状态，避免重复使用。</text>
+    <text class="notice-item">2. 当前手续费为 {{feeRateText}}，页面已自动计算预计实转数量。</text>
+    <text class="notice-item">3. 后台处理完成后会标记为已完成；如拒绝转出，锁定宝石会自动退回账户。</text>
+  </view>
+
+
+  <view class="section-card">
+    <view class="section-head">
+      <view>
+        <text class="section-kicker">历史记录</text>
+        <text class="section-title">转出记录</text>
+      </view>
+    </view>
+    <view class="history-list">
+      <view class="history-item" wx:for="{{history}}" wx:key="id">
+        <view class="history-top">
+          <view>
+            <text class="history-id">{{item.id}}</text>
+            <text class="history-time">{{item.createTime}}</text>
+          </view>
+          <text class="history-status history-status-{{item.statusClass}}">{{item.statusText}}</text>
+        </view>
+        <view class="history-grid">
+          <view class="history-metric">
+            <text class="history-metric-label">申请</text>
+            <text class="history-metric-value">{{item.requestAmount}}</text>
+          </view>
+          <view class="history-metric">
+            <text class="history-metric-label">手续费</text>
+            <text class="history-metric-value">{{item.feeAmount}}</text>
+          </view>
+          <view class="history-metric">
+            <text class="history-metric-label">实转</text>
+            <text class="history-metric-value">{{item.actualAmount}}</text>
+          </view>
+        </view>
+        <text class="history-note" wx:if="{{item.userNote}}">备注：{{item.userNote}}</text>
+        <text class="history-note" wx:if="{{item.adminNote}}">后台备注：{{item.adminNote}}</text>
+      </view>
+      <view class="empty-view" wx:if="{{history.length === 0}}">
+        <text class="empty-text">暂无转出记录</text>
+      </view>
+    </view>
+  </view>
+</view>

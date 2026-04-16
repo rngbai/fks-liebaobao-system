@@ -1,0 +1,151 @@
+<view class="page">
+  <view class="hero-card">
+    <view class="hero-copy">
+      <text class="hero-kicker">宝石中心</text>
+      <text class="hero-title">我的宝石</text>
+      <text class="hero-desc">{{userInfo.beastId ? '已绑定方块兽ID：' + userInfo.beastId : '未绑定方块兽ID，建议先去个人设置绑定后再进行转入和转出。'}}</text>
+    </view>
+    <view class="hero-balance-card">
+      <text class="hero-balance-label">当前余额</text>
+      <view class="hero-balance-row">
+        <image class="hero-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text class="hero-balance-num">{{balance}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="stats-grid">
+    <view class="stat-card">
+      <text class="stat-label">锁定中</text>
+      <text class="stat-value">{{lockedGems}}</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-label">累计转入</text>
+      <text class="stat-value">{{totalRecharged}}</text>
+    </view>
+
+    <view class="stat-card">
+      <text class="stat-label">累计支出</text>
+      <text class="stat-value">{{totalSpent}}</text>
+    </view>
+    <view class="stat-card">
+      <text class="stat-label">累计获益</text>
+      <text class="stat-value">{{totalEarned}}</text>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <view>
+        <text class="section-kicker">功能区</text>
+        <text class="section-title">宝石功能区</text>
+      </view>
+      <text class="section-link" bindtap="goProfile">去绑定</text>
+    </view>
+
+    <view class="action-grid">
+      <view class="action-card action-card-primary" bindtap="goRecharge">
+        <text class="action-icon">↘</text>
+        <text class="action-title">转入宝石</text>
+        <text class="action-desc">创建转入订单，完成校验后自动到账</text>
+      </view>
+
+      <view class="action-card action-card-warm" bindtap="goTransfer">
+        <text class="action-icon">↗</text>
+        <text class="action-title">转出宝石</text>
+        <text class="action-desc">提交转出申请，后台按你的方块兽ID人工处理</text>
+      </view>
+    </view>
+
+    <view class="bind-tip-card" wx:if="{{!userInfo.beastId}}" bindtap="goProfile">
+      <text class="bind-tip-title">请先绑定方块兽ID</text>
+      <text class="bind-tip-desc">未绑定时会影响转入、转出和后台处理确认，点击这里直接去个人设置补全。</text>
+      <text class="bind-tip-btn">立即绑定</text>
+    </view>
+
+    <view class="pending-card" wx:if="{{pendingTransfer}}">
+      <view class="pending-top">
+        <view>
+          <text class="pending-kicker">待处理转出</text>
+          <text class="pending-id">{{pendingTransfer.id}}</text>
+        </view>
+        <view class="pending-status">{{pendingTransfer.statusText}}</view>
+      </view>
+      <view class="pending-grid">
+        <view class="pending-metric">
+          <text class="pending-metric-label">申请数量</text>
+          <text class="pending-metric-value">{{pendingTransfer.requestAmount}}</text>
+        </view>
+        <view class="pending-metric">
+          <text class="pending-metric-label">预计实转</text>
+          <text class="pending-metric-value">{{pendingTransfer.actualAmount}}</text>
+        </view>
+        <view class="pending-metric">
+          <text class="pending-metric-label">手续费</text>
+          <text class="pending-metric-value">{{pendingTransfer.feeAmount}}</text>
+        </view>
+      </view>
+      <text class="pending-desc">{{pendingTransfer.statusDesc}}，处理后会同步到你的流水记录里。</text>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <view>
+        <text class="section-kicker">流水明细</text>
+        <text class="section-title">收支明细</text>
+      </view>
+    </view>
+    <view class="record-list">
+      <view class="record-item" wx:for="{{records}}" wx:key="id">
+        <view class="record-left">
+          <text class="record-desc">{{item.desc}}</text>
+          <text class="record-time">{{item.time}}</text>
+        </view>
+        <text class="record-amount {{item.amount > 0 ? 'income' : 'spend'}}">{{item.amount > 0 ? '+' : ''}}{{item.amount}}</text>
+      </view>
+      <view class="empty-view" wx:if="{{records.length === 0}}">
+        <text class="empty-text">暂无宝石流水</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="section-card">
+    <view class="section-head">
+      <view>
+        <text class="section-kicker">转出记录</text>
+        <text class="section-title">转出记录</text>
+      </view>
+    </view>
+    <view class="transfer-history-list">
+      <view class="history-item" wx:for="{{transferHistory}}" wx:key="id">
+        <view class="history-top">
+          <view>
+            <text class="history-id">{{item.id}}</text>
+            <text class="history-time">{{item.createTime}}</text>
+          </view>
+          <text class="history-status history-status-{{item.statusClass}}">{{item.statusText}}</text>
+        </view>
+        <view class="history-grid">
+          <view class="history-metric">
+            <text class="history-metric-label">申请</text>
+            <text class="history-metric-value">{{item.requestAmount}}</text>
+          </view>
+          <view class="history-metric">
+            <text class="history-metric-label">手续费</text>
+            <text class="history-metric-value">{{item.feeAmount}}</text>
+          </view>
+          <view class="history-metric">
+            <text class="history-metric-label">实转</text>
+            <text class="history-metric-value">{{item.actualAmount}}</text>
+          </view>
+        </view>
+        <text class="history-note" wx:if="{{item.userNote}}">备注：{{item.userNote}}</text>
+        <text class="history-note" wx:if="{{item.adminNote}}">后台备注：{{item.adminNote}}</text>
+      </view>
+      <view class="empty-view" wx:if="{{transferHistory.length === 0}}">
+        <text class="empty-text">暂无转出记录</text>
+      </view>
+    </view>
+  </view>
+</view>

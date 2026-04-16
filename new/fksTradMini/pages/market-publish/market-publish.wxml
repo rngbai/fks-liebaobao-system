@@ -1,0 +1,52 @@
+<!-- 发布挂单 -->
+<view class="container">
+
+  <!-- 类型切换 -->
+  <view class="type-toggle">
+    <view class="type-btn {{publishType === 'sell' ? 'type-sell-active' : 'type-inactive'}}" bindtap="setType" data-type="sell">🏷️ 出售</view>
+    <view class="type-btn {{publishType === 'buy' ? 'type-buy-active' : 'type-inactive'}}" bindtap="setType" data-type="buy">🛒 求购</view>
+  </view>
+
+  <view class="form-card">
+    <view class="form-item">
+      <view class="form-label required">标题</view>
+      <input class="form-input" placeholder="例：出售 炎龙兽×10 精品" value="{{form.title}}" bindinput="onInput" data-field="title" maxlength="40" placeholder-style="color:#bbb"/>
+    </view>
+    <view class="form-item">
+      <view class="form-label required">{{publishType === 'sell' ? '出售数量' : '需要数量'}}</view>
+      <view class="input-with-unit">
+        <input class="form-input" type="number" placeholder="数量" value="{{form.quantity}}" bindinput="onInput" data-field="quantity" placeholder-style="color:#bbb"/>
+        <text class="unit-text">只</text>
+      </view>
+    </view>
+    <view class="form-item">
+      <view class="form-label required">单价（宝石/只）</view>
+      <view class="input-with-unit">
+        <input class="form-input" type="number" placeholder="每只多少宝石" value="{{form.price_per}}" bindinput="onInput" data-field="price_per" placeholder-style="color:#bbb"/>
+        <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+      </view>
+    </view>
+    <view class="form-item">
+      <view class="form-label required">QQ号</view>
+      <input class="form-input" type="number" placeholder="买家/卖家联系QQ" value="{{form.qq}}" bindinput="onInput" data-field="qq" placeholder-style="color:#bbb"/>
+    </view>
+    <view class="form-item">
+      <view class="form-label">微信号 <text class="optional">（可选）</text></view>
+      <input class="form-input" placeholder="微信联系方式" value="{{form.wechat}}" bindinput="onInput" data-field="wechat" placeholder-style="color:#bbb"/>
+    </view>
+    <view class="form-item">
+      <view class="form-label">补充说明 <text class="optional">（可选）</text></view>
+      <textarea class="textarea-input" placeholder="例：完美属性，可议价..." value="{{form.desc}}" bindinput="onInput" data-field="desc" maxlength="100" placeholder-style="color:#bbb;font-size:26rpx"/>
+    </view>
+  </view>
+
+  <!-- 每人只能发一条提示 -->
+  <view class="limit-tip">⚠️ 每人最多同时发布1条挂单，发布新的将自动替换旧的</view>
+
+  <view class="submit-wrap">
+    <view class="submit-btn {{canSubmit ? 'btn-primary' : 'btn-gray'}}" bindtap="submitPublish">
+      发布{{publishType === 'sell' ? '出售' : '求购'}}信息
+    </view>
+  </view>
+
+</view>

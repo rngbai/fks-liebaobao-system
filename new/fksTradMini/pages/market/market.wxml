@@ -1,0 +1,115 @@
+<!-- 交易市场 -->
+<view class="container">
+
+  <!-- Tab切换：出售中 / 求购中 -->
+  <view class="market-tab">
+    <view class="mkt-tab-item {{marketTab === 'sell' ? 'active' : ''}}" bindtap="switchTab" data-tab="sell">
+      🏷️ 出售中
+    </view>
+    <view class="mkt-tab-item {{marketTab === 'buy' ? 'active' : ''}}" bindtap="switchTab" data-tab="buy">
+      🛒 求购中
+    </view>
+  </view>
+
+  <!-- 安全提示横幅 -->
+  <view class="safe-banner">
+    <text class="safe-icon">🛡️</text>
+    <text class="safe-text">交易需谨慎，聊好价格后请让卖家在小程序生成保单，安全交易！谨防跑路狗</text>
+  </view>
+
+  <!-- 发布按钮 -->
+  <view class="publish-bar">
+    <view class="publish-btn" bindtap="goPublish">
+      <text>＋ 我要{{publishActionText}}</text>
+
+    </view>
+    <text class="publish-limit">（每人最多挂1条）</text>
+  </view>
+
+  <!-- 出售中列表 -->
+  <view class="mkt-list" wx:if="{{marketTab === 'sell'}}">
+    <block wx:if="{{sellList.length > 0}}">
+      <view
+        class="mkt-card"
+        wx:for="{{sellList}}"
+        wx:key="id"
+        bindtap="goDetail"
+        data-id="{{item.id}}"
+        data-type="sell"
+      >
+        <view class="mkt-card-header">
+          <view class="mkt-type-tag sell-tag">出售</view>
+          <view class="mkt-gem">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text class="mkt-gem-num">{{item.price_per}}</text>
+            <text class="mkt-gem-unit">/只</text>
+          </view>
+        </view>
+        <view class="mkt-title">{{item.title}}</view>
+        <view class="mkt-body">
+          <view class="mkt-row">
+            <text class="mkt-key">数量</text>
+            <text class="mkt-val">{{item.quantity}} 只</text>
+          </view>
+          <view class="mkt-row">
+            <text class="mkt-key">卖家</text>
+            <text class="mkt-val">{{item.seller_nick}}</text>
+          </view>
+        </view>
+        <view class="mkt-footer">
+          <text class="mkt-time">{{item.create_time}}</text>
+          <view class="mkt-contact-hint">点击查看联系方式 ›</view>
+        </view>
+      </view>
+    </block>
+    <view class="empty-view" wx:else>
+      <text class="empty-icon">🏷️</text>
+      <text class="empty-text">暂无出售信息</text>
+      <view class="empty-btn btn-primary" bindtap="goPublish">发布出售</view>
+    </view>
+  </view>
+
+  <!-- 求购中列表 -->
+  <view class="mkt-list" wx:if="{{marketTab === 'buy'}}">
+    <block wx:if="{{buyList.length > 0}}">
+      <view
+        class="mkt-card mkt-card-buy"
+        wx:for="{{buyList}}"
+        wx:key="id"
+        bindtap="goDetail"
+        data-id="{{item.id}}"
+        data-type="buy"
+      >
+        <view class="mkt-card-header">
+          <view class="mkt-type-tag buy-tag">求购</view>
+          <view class="mkt-gem">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text class="mkt-gem-num">{{item.price_per}}</text>
+            <text class="mkt-gem-unit">/只</text>
+          </view>
+        </view>
+        <view class="mkt-title">{{item.title}}</view>
+        <view class="mkt-body">
+          <view class="mkt-row">
+            <text class="mkt-key">需要数量</text>
+            <text class="mkt-val">{{item.quantity}} 只</text>
+          </view>
+          <view class="mkt-row">
+            <text class="mkt-key">求购人</text>
+            <text class="mkt-val">{{item.buyer_nick}}</text>
+          </view>
+        </view>
+        <view class="mkt-footer">
+          <text class="mkt-time">{{item.create_time}}</text>
+          <view class="mkt-contact-hint buy-hint">点击查看联系方式 ›</view>
+        </view>
+      </view>
+    </block>
+    <view class="empty-view" wx:else>
+      <text class="empty-icon">🛒</text>
+      <text class="empty-text">暂无求购信息</text>
+      <view class="empty-btn btn-primary" bindtap="goPublish">发布求购</view>
+    </view>
+  </view>
+
+</view>

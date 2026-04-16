@@ -1,0 +1,163 @@
+.container {
+  background: #F5F6FA;
+  min-height: 100vh;
+  padding-bottom: 60rpx;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #f0f0f0;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.filter-item {
+  padding: 10rpx 28rpx;
+  border-radius: 30rpx;
+  font-size: 24rpx;
+  color: #666;
+  background: #F5F6FA;
+  flex-shrink: 0;
+}
+
+.filter-active {
+  background: linear-gradient(135deg,#5B6EF5,#8B5CF6);
+  color: #fff;
+  font-weight: 600;
+}
+
+.rec-list {
+  padding: 16rpx 24rpx;
+}
+
+.rec-card {
+  background: #fff;
+  border-radius: 18rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  border-left: 6rpx solid #5B6EF5;
+  box-shadow: 0 8rpx 24rpx rgba(91,110,245,0.08);
+}
+
+.rec-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.rec-order-id {
+  font-size: 22rpx;
+  color: #94A3B8;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.status-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.status-0 { background: #FFF3E0; color: #FF9800; }
+.status-1 { background: #E0F2FE; color: #0284C7; }
+.status-2 { background: #E8F5E9; color: #2E7D32; }
+.status-3 { background: #FEE2E2; color: #DC2626; }
+
+.rec-body {
+  display: grid;
+  gap: 10rpx;
+}
+
+.rec-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18rpx;
+}
+
+.rk {
+  font-size: 24rpx;
+  color: #94A3B8;
+}
+
+.rv {
+  flex: 1;
+  text-align: right;
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.gem-inline {
+  width: 26rpx;
+  height: 26rpx;
+  vertical-align: middle;
+}
+
+.gem-val {
+  color: #8B5CF6;
+  font-weight: 800;
+}
+
+.success-val {
+  color: #16A34A;
+  font-weight: 700;
+}
+
+.rec-desc {
+  display: block;
+  margin-top: 16rpx;
+  color: #64748B;
+  font-size: 22rpx;
+  line-height: 1.6;
+}
+
+.rec-time {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #A1A1AA;
+}
+
+.empty-view {
+  padding: 80rpx 24rpx;
+  text-align: center;
+}
+
+.empty-text {
+  color: #A1A1AA;
+  font-size: 26rpx;
+}
+
+/* 兼容性兜底：避免 gap / grid 失效导致保单记录布局错位 */
+.filter-item + .filter-item {
+  margin-left: 16rpx;
+}
+
+.rec-card-header .status-tag {
+  margin-left: 16rpx;
+}
+
+.rec-body {
+  display: block;
+}
+
+.rec-row + .rec-row {
+  margin-top: 10rpx;
+}
+
+.rk {
+  width: 140rpx;
+  flex-shrink: 0;
+}
+

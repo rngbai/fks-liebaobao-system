@@ -1,0 +1,174 @@
+.container {
+  padding: 24rpx;
+  padding-bottom: 120rpx;
+  background: #F5F6FA;
+  min-height: 100vh;
+}
+
+.form-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 28rpx 24rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.05);
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 24rpx;
+}
+
+.form-item {
+  margin-bottom: 28rpx;
+}
+
+.form-label {
+  font-size: 26rpx;
+  color: #555;
+  margin-bottom: 12rpx;
+  font-weight: 500;
+}
+.form-label.required::before {
+  content: '* ';
+  color: #FF5252;
+}
+.optional {
+  font-size: 22rpx;
+  color: #bbb;
+  font-weight: 400;
+}
+
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  background: #F8F9FF;
+  border-radius: 12rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #333;
+  border: 2rpx solid #EAECFF;
+}
+
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  background: #F8F9FF;
+  border-radius: 12rpx;
+  border: 2rpx solid #EAECFF;
+  padding-right: 16rpx;
+}
+.input-with-unit .form-input {
+  border: none;
+  background: transparent;
+  flex: 1;
+}
+.unit { font-size: 28rpx; color: #8B5CF6; }
+
+/* 总押额展示 */
+.total-box {
+  background: linear-gradient(135deg, #F0F1FF, #F5F0FF);
+  border-radius: 16rpx;
+  padding: 24rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+  margin-top: 8rpx;
+  border: 1rpx solid #D4D8FF;
+}
+.total-label { font-size: 26rpx; color: #5B6EF5; font-weight: 600; }
+.total-value { display: flex; align-items: center; gap: 8rpx; }
+.gem-big-img { width: 48rpx; height: 48rpx; flex-shrink: 0; }
+.total-num {
+  font-size: 60rpx;
+  font-weight: 800;
+  color: #8B5CF6;
+  line-height: 1;
+}
+.total-tip { font-size: 22rpx; color: #aaa; }
+
+/* 上传区域 */
+.form-tip { font-size: 24rpx; color: #999; margin-bottom: 20rpx; }
+
+.upload-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200rpx;
+  border: 2rpx dashed #CACEFF;
+  border-radius: 16rpx;
+  background: #F8F9FF;
+  gap: 8rpx;
+}
+.upload-icon { font-size: 60rpx; }
+.upload-text { font-size: 28rpx; color: #5B6EF5; font-weight: 500; }
+.upload-sub { font-size: 22rpx; color: #bbb; }
+
+.preview-wrap { position: relative; }
+.preview-img {
+  width: 100%;
+  border-radius: 12rpx;
+  display: block;
+}
+.re-upload {
+  text-align: center;
+  color: #5B6EF5;
+  font-size: 26rpx;
+  padding: 16rpx 0 4rpx;
+}
+
+/* 协议 */
+.agreement-row {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 4rpx;
+  gap: 12rpx;
+}
+.checkbox {
+  width: 36rpx;
+  height: 36rpx;
+  border: 2rpx solid #ccc;
+  border-radius: 6rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  flex-shrink: 0;
+}
+.checkbox.checked {
+  background: #5B6EF5;
+  border-color: #5B6EF5;
+  color: #fff;
+}
+.agree-text { font-size: 24rpx; color: #666; }
+.agree-link { font-size: 24rpx; color: #5B6EF5; }
+
+/* 提交按钮 */
+.submit-wrap {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20rpx 40rpx;
+  background: #fff;
+  box-shadow: 0 -4rpx 20rpx rgba(0,0,0,0.06);
+}
+.submit-btn {
+  text-align: center;
+  height: 96rpx;
+  line-height: 96rpx;
+  border-radius: 48rpx;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+.submit-btn.active {
+  background: linear-gradient(135deg, #5B6EF5, #8B5CF6);
+  color: #fff;
+}
+.submit-btn.disabled {
+  background: #e0e0e0;
+  color: #bbb;
+}

@@ -1,0 +1,203 @@
+<!-- 担保中心 -->
+<view class="container">
+
+  <view class="gem-balance-card">
+    <view class="gem-balance-left">
+      <text class="gem-balance-label">我的宝石余额</text>
+      <view class="gem-balance-num-row">
+        <image class="gem-emoji" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text class="gem-balance-num">{{gemBalance}}</text>
+      </view>
+      <text class="gem-balance-tip">卖家发布时需扣“挂单宝石 + 1”，买家到账时平台还会再扣 1 宝石手续费</text>
+
+    </view>
+    <view class="gem-recharge-btn" bindtap="goRecharge">转入宝石</view>
+
+  </view>
+
+  <view class="func-grid">
+    <view class="func-item" bindtap="goCreateGuarantee">
+      <view class="func-icon-wrap func-bg-1">
+        <text class="func-icon">📋</text>
+      </view>
+      <text class="func-name">发布保单</text>
+      <text class="func-desc">卖家填写兽王与猎人信息</text>
+    </view>
+    <view class="func-item" bindtap="goQueryOrder">
+      <view class="func-icon-wrap func-bg-2">
+        <text class="func-icon">🔍</text>
+      </view>
+      <text class="func-name">查询保单</text>
+      <text class="func-desc">买家输入单号后匹配</text>
+    </view>
+    <view class="func-item" bindtap="goRecharge">
+      <view class="func-icon-wrap func-bg-3">
+        <text class="func-icon">💰</text>
+      </view>
+      <text class="func-name">宝石转入</text>
+      <text class="func-desc">补足发布所需余额</text>
+    </view>
+
+    <view class="func-item" bindtap="goRecords">
+      <view class="func-icon-wrap func-bg-4">
+        <text class="func-icon">📊</text>
+      </view>
+      <text class="func-name">保单记录</text>
+      <text class="func-desc">查看全部历史订单</text>
+    </view>
+  </view>
+
+  <view class="query-card">
+    <view class="query-title">🔍 买家查询保单</view>
+    <view class="query-tip">输入卖家给你的保单号，先核对兽王、数量和卖家地球猎人 ID，再决定是否匹配。</view>
+    <view class="query-input-row">
+      <input
+        class="query-input"
+        placeholder="请输入保单号"
+        value="{{queryOrderId}}"
+        bindinput="onQueryInput"
+        placeholder-style="color:#bbb;font-size:26rpx"
+      />
+      <view class="query-btn" bindtap="queryOrder">查询</view>
+    </view>
+  </view>
+
+  <view class="public-orders-section">
+    <view class="section-title-bar">
+      <text class="sec-title">可匹配的保单</text>
+      <text class="sec-more" bindtap="refreshPublicOrders">刷新 ↻</text>
+    </view>
+    <view class="public-filter-row" wx:if="{{publicOrders.length > 0 || publicFilterPet}}">
+      <text class="filter-tag {{!publicFilterPet ? 'filter-active' : ''}}" bindtap="filterPublicPet" data-pet="">全部</text>
+      <text class="filter-tag {{publicFilterPet === item ? 'filter-active' : ''}}" wx:for="{{publicPetTags}}" wx:key="*this" bindtap="filterPublicPet" data-pet="{{item}}">{{item}}</text>
+    </view>
+    <view class="guarantee-list">
+      <block wx:if="{{publicOrders.length > 0}}">
+        <view class="guarantee-card public-card" wx:for="{{publicOrders}}" wx:key="id" bindtap="goQueryWithId" data-id="{{item.id}}">
+          <view class="gcard-header">
+            <view class="gcard-left">
+              <text class="gcard-id">{{item.id}}</text>
+              <view class="status-tag status-open">可匹配</view>
+            </view>
+            <view class="gcard-gem">
+              <image class="gcard-gem-icon" src="/assets/baoshi.png" mode="aspectFit"/>
+              <text class="gcard-gem-num">{{item.gem_amount}}</text>
+            </view>
+          </view>
+          <view class="gcard-body">
+            <view class="gcard-row">
+              <text class="gcard-key">兽王类型</text>
+              <text class="gcard-val">{{item.pet_name || '待补充'}}</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">交易数量</text>
+              <text class="gcard-val">{{item.trade_quantity || 1}} 只</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">卖家猎人ID</text>
+              <text class="gcard-val">{{item.seller_game_id || '未填写'}}</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">买家预计实收</text>
+              <text class="gcard-val gcard-val-highlight">{{item.actual_receive}} 宝石</text>
+            </view>
+          </view>
+          <text class="gcard-desc">点击查看详情并匹配</text>
+          <text class="gcard-time">{{item.create_time}}</text>
+        </view>
+      </block>
+      <view class="empty-view" wx:else>
+        <text class="empty-icon">🔍</text>
+        <text class="empty-text">当前没有可匹配的保单</text>
+        <text class="empty-sub">等待卖家发布新保单，或直接输入保单号查询</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="my-guarantee-section">
+    <view class="section-title-bar">
+      <text class="sec-title">我发布的保单</text>
+      <text class="sec-more" bindtap="goRecords">查看全部 ›</text>
+    </view>
+
+    <view class="guarantee-list">
+      <block wx:if="{{guaranteeList.length > 0}}">
+        <view
+          class="guarantee-card"
+          wx:for="{{guaranteeList}}"
+          wx:key="id"
+          bindtap="goDetail"
+          data-id="{{item.id}}"
+        >
+          <view class="gcard-header">
+            <view class="gcard-left">
+              <text class="gcard-id">{{item.id}}</text>
+              <view class="status-tag status-{{item.status}}">{{item.status_text || statusText[item.status]}}</view>
+            </view>
+            <view class="gcard-gem">
+              <image class="gcard-gem-icon" src="/assets/baoshi.png" mode="aspectFit"/>
+              <text class="gcard-gem-num">{{item.gem_amount}}</text>
+            </view>
+          </view>
+          <view class="gcard-body">
+            <view class="gcard-row">
+              <text class="gcard-key">兽王类型</text>
+              <text class="gcard-val">{{item.pet_name || '待补充'}}</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">交易数量</text>
+              <text class="gcard-val">{{item.trade_quantity || 1}} 只</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">地球猎人ID</text>
+              <text class="gcard-val">{{item.seller_game_id || '未填写'}}</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">买家方块兽ID</text>
+              <text class="gcard-val">{{item.buyer_beast_id || '等待买家匹配'}}</text>
+            </view>
+            <view class="gcard-row">
+              <text class="gcard-key">到账口径</text>
+              <text class="gcard-val">标价 {{item.gem_amount}} / 实收 {{item.actual_receive}}</text>
+            </view>
+
+          </view>
+          <text class="gcard-desc">{{item.status_desc || '点击查看保单详情'}}</text>
+          <text class="gcard-time">{{item.create_time}}</text>
+        </view>
+      </block>
+      <view class="empty-view" wx:else>
+        <text class="empty-icon">📋</text>
+        <text class="empty-text">暂无保单记录</text>
+        <view class="empty-btn btn-primary" bindtap="goCreateGuarantee">立即发布保单</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="rule-card">
+    <view class="rule-title">📖 当前保单规则</view>
+    <view class="rule-item">
+      <text class="rule-dot">•</text>
+      <text class="rule-text">卖家发布保单时，要填写 <text class="rule-highlight">兽王类型、挂单宝石、交易数量、地球猎人ID 与昵称</text>。</text>
+    </view>
+    <view class="rule-item">
+      <text class="rule-dot">•</text>
+      <text class="rule-text">买家查询保单后，只能绑定 <text class="rule-highlight">一次</text> 自己的方块兽信息，匹配后不会再更换买家。</text>
+    </view>
+    <view class="rule-item">
+      <text class="rule-dot">•</text>
+      <text class="rule-text">买家提交匹配资料后，需要卖家 <text class="rule-highlight">再次确认交易完成</text>，确认后系统会自动把宝石发给买家。</text>
+
+    </view>
+    <view class="rule-item">
+      <text class="rule-dot">•</text>
+      <text class="rule-text">卖家 2 小时未确认时，系统会按规则 <text class="rule-highlight">自动确认</text>，避免买家长期等待。</text>
+    </view>
+    <view class="rule-item">
+      <text class="rule-dot">•</text>
+      <text class="rule-text">担保采用 <text class="rule-highlight">买卖双方各扣 1 宝石</text> 的手续费规则；例如挂单 100 宝石时，卖家发布先扣 101，买家到账再扣 1，最终实收 99。</text>
+
+    </view>
+  </view>
+
+</view>

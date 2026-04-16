@@ -1,0 +1,75 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/rank/rank",
+    "pages/group-detail/group-detail",
+    "pages/guarantee/guarantee",
+
+    "pages/market/market",
+    "pages/mine/mine",
+    "pages/recharge/recharge",
+    "pages/transfer/transfer",
+    "pages/create-order/create-order",
+
+    "pages/guarantee-order/guarantee-order",
+    "pages/market-publish/market-publish",
+    "pages/market-detail/market-detail",
+    "pages/detail/detail",
+    "pages/appeal/appeal",
+    "pages/publish/publish",
+    "pages/profile/profile",
+    "pages/gems/gems",
+
+    "pages/messages/messages",
+    "pages/community/community",
+
+    "pages/ads-invest/ads-invest",
+    "pages/guarantee-records/guarantee-records",
+    "pages/recommend/recommend",
+    "pages/feedback/feedback"
+  ],
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#5B6EF5",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "images/tabbar/shouye_normal.png",
+        "selectedIconPath": "images/tabbar/shouye_selected.png"
+      },
+      {
+        "pagePath": "pages/guarantee/guarantee",
+        "text": "担保",
+        "iconPath": "images/tabbar/danbao_normal.png",
+        "selectedIconPath": "images/tabbar/danbao_selected.png"
+      },
+      {
+        "pagePath": "pages/community/community",
+        "text": "社区",
+        "iconPath": "images/tabbar/jiaoyishichang_normal.png",
+        "selectedIconPath": "images/tabbar/jiaoyishichang_selected.png"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的",
+        "iconPath": "images/tabbar/wode_normal.png",
+        "selectedIconPath": "images/tabbar/wode_selected.png"
+      }
+
+
+    ]
+  },
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#5B6EF5",
+    "navigationBarTitleText": "方块兽担保",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F5F6FA"
+  },
+  "style": "v2",
+  "lazyCodeLoading": "requiredComponents",
+  "sitemapLocation": "sitemap.json"
+}

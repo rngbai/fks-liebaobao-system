@@ -1,0 +1,117 @@
+<!-- 发布担保单 -->
+<view class="container">
+
+  <view class="form-card">
+    <view class="section-title">📋 交易信息</view>
+
+    <!-- 卖家游戏ID -->
+    <view class="form-item">
+      <view class="form-label required">卖家游戏ID</view>
+      <input
+        class="form-input"
+        placeholder="请输入您的游戏ID"
+        value="{{form.game_id_seller}}"
+        bindinput="onInput"
+        data-field="game_id_seller"
+        maxlength="50"
+      />
+    </view>
+
+    <!-- 买家游戏ID（可选） -->
+    <view class="form-item">
+      <view class="form-label">买家游戏ID <text class="optional">（可选，填写后限定买家）</text></view>
+      <input
+        class="form-input"
+        placeholder="不填则任何人可接单"
+        value="{{form.game_id_buyer}}"
+        bindinput="onInput"
+        data-field="game_id_buyer"
+        maxlength="50"
+      />
+    </view>
+
+  </view>
+
+  <!-- 宝石设置 -->
+  <view class="form-card">
+    <view class="section-title"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> 宝石设置</view>
+
+    <view class="form-item">
+      <view class="form-label required">约定返还宝石数</view>
+      <view class="input-with-unit">
+        <input
+          class="form-input"
+          type="digit"
+          placeholder="买家应返还的宝石数量"
+          value="{{form.back_gem}}"
+          bindinput="onGemInput"
+          data-field="back_gem"
+        />
+        <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+      </view>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label required">手续费宝石数</view>
+      <view class="input-with-unit">
+        <input
+          class="form-input"
+          type="digit"
+          placeholder="平台手续费（建议5%）"
+          value="{{form.fee_gem}}"
+          bindinput="onGemInput"
+          data-field="fee_gem"
+        />
+        <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+      </view>
+    </view>
+
+    <!-- 自动计算总押额 -->
+    <view class="total-box">
+      <view class="total-label">卖家需押总额</view>
+      <view class="total-value">
+        <image class="gem-big-img" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text class="total-num">{{totalGem}}</text>
+      </view>
+      <view class="total-tip">= 返还宝石 + 手续费</view>
+    </view>
+
+  </view>
+
+  <!-- 截图上传 -->
+  <view class="form-card">
+    <view class="section-title">📷 交易截图</view>
+    <view class="form-tip">请上传双方约定的截图作为凭证</view>
+
+    <view class="upload-area" bindtap="chooseImage" wx:if="{{!screenshotUrl}}">
+      <text class="upload-icon">📁</text>
+      <text class="upload-text">点击上传截图</text>
+      <text class="upload-sub">支持 JPG / PNG</text>
+    </view>
+
+    <view class="preview-wrap" wx:else>
+      <image class="preview-img" src="{{screenshotUrl}}" mode="widthFix" bindtap="previewImage" />
+      <view class="re-upload" bindtap="chooseImage">重新上传</view>
+    </view>
+  </view>
+
+  <!-- 协议 -->
+  <view class="agreement-row" bindtap="toggleAgreement">
+    <view class="checkbox {{agreed ? 'checked' : ''}}">
+      <text wx:if="{{agreed}}">✓</text>
+    </view>
+    <text class="agree-text">我已阅读并同意 </text>
+    <text class="agree-link" catchtap="showRule">《担保交易规则》</text>
+  </view>
+
+  <!-- 提交按钮 -->
+  <view class="submit-wrap">
+    <view
+      class="submit-btn {{canSubmit ? 'active' : 'disabled'}}"
+      bindtap="submitOrder"
+    >
+      发布担保单
+    </view>
+  </view>
+
+</view>

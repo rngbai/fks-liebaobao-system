@@ -1,0 +1,78 @@
+/* 全局样式 */
+
+/* 宝石图标图片通用样式 */
+.gem-inline {
+  width: 32rpx;
+  height: 32rpx;
+  vertical-align: middle;
+  display: inline-block;
+  margin: 0 2rpx;
+  position: relative;
+  top: -2rpx;
+}
+.unit-gem {
+  width: 36rpx;
+  height: 36rpx;
+  flex-shrink: 0;
+}
+.gem-stat-icon {
+  width: 28rpx;
+  height: 28rpx;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 4rpx;
+}
+.menu-icon-img {
+  width: 44rpx;
+  height: 44rpx;
+}
+.group-icon-img {
+  width: 48rpx;
+  height: 48rpx;
+}
+.msg-gem-icon {
+  width: 44rpx;
+  height: 44rpx;
+}
+
+page {
+  background: #F5F6FA;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+
+/* 通用按钮 */
+.btn-primary {
+  background: linear-gradient(135deg, #5B6EF5, #8B5CF6);
+  color: #fff;
+  border-radius: 40rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 600;
+  padding: 22rpx 0;
+  line-height: 1;
+}
+.btn-gray {
+  background: #f0f0f0;
+  color: #999;
+  border-radius: 40rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 600;
+  padding: 22rpx 0;
+}
+.btn-outline {
+  border: 2rpx solid #5B6EF5;
+  color: #5B6EF5;
+  border-radius: 40rpx;
+  text-align: center;
+  font-size: 30rpx;
+  font-weight: 600;
+  padding: 20rpx 0;
+}
+
+/* 状态标签 */
+.status-tag { display: inline-block; padding: 4rpx 16rpx; border-radius: 20rpx; font-size: 22rpx; font-weight: 500; }
+.status-0 { background: #FFF3E0; color: #FF9800; }
+.status-1 { background: #E3F2FD; color: #2196F3; }
+.status-2 { background: #E8F5E9; color: #4CAF50; }
+.status-3 { background: #FFEBEE; color: #FF5252; }

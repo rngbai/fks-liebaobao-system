@@ -1,0 +1,55 @@
+<view class="page">
+  <view class="hero-card">
+    <text class="hero-kicker">RANK CENTER</text>
+    <text class="hero-title">排行榜单独做一页，更清楚</text>
+    <text class="hero-desc">把首页里的榜单信息抽成独立导航页，方便专门看担保达人榜和推荐贡献榜。</text>
+  </view>
+
+  <view class="tab-row">
+    <view
+      class="tab-chip {{activeTab === item.key ? 'tab-chip-active' : ''}}"
+      wx:for="{{tabs}}"
+      wx:key="key"
+      bindtap="switchTab"
+      data-key="{{item.key}}"
+    >
+      <text class="tab-title">{{item.title}}</text>
+      <text class="tab-desc">{{item.desc}}</text>
+    </view>
+  </view>
+
+  <view class="podium-card">
+    <text class="section-title">本周前三</text>
+    <view class="podium-row">
+      <view class="podium-item podium-item-{{index + 1}}" wx:for="{{topThree}}" wx:key="id">
+        <text class="podium-rank">{{item.crown || item.rankNo}}</text>
+        <text class="podium-name">{{item.nickname}}</text>
+        <text class="podium-score">{{item.scoreText}}</text>
+        <text class="podium-reward">奖励 {{item.rewardText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="list-card">
+    <text class="section-title">完整榜单</text>
+    <view class="rank-row" wx:for="{{rankList}}" wx:key="id">
+      <view class="rank-no">{{item.rankNo}}</view>
+      <view class="rank-main">
+        <text class="rank-name">{{item.nickname}}</text>
+        <text class="rank-slogan">{{item.slogan}}</text>
+      </view>
+      <view class="rank-side">
+        <text class="rank-score">{{item.scoreText}}</text>
+        <text class="rank-reward">{{item.rewardText}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="group-cta" bindtap="goGroupDetail">
+    <view>
+      <text class="group-cta-title">想冲榜？先加入官方群</text>
+      <text class="group-cta-sub">群内会同步活动、规则和玩法，QQ群：769851293</text>
+    </view>
+    <text class="group-cta-arrow">›</text>
+  </view>
+</view>

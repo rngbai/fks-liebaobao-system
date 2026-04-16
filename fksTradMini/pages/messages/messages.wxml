@@ -1,0 +1,22 @@
+<!-- 消息中心 -->
+<view class="container">
+  <view class="msg-list">
+    <view class="msg-item {{item.read ? '' : 'unread'}}" wx:for="{{messages}}" wx:key="id">
+      <view class="msg-dot" wx:if="{{!item.read}}"></view>
+      <view class="msg-icon-wrap msg-type-{{item.type}}">
+        <block wx:if="{{item.type === 'gem'}}">
+          <image class="msg-gem-icon" src="/assets/baoshi.png" mode="aspectFit"/>
+        </block>
+        <text wx:else class="msg-icon">{{item.type === 'guarantee' ? '🛡️' : '📢'}}</text>
+      </view>
+      <view class="msg-content">
+        <text class="msg-title">{{item.title}}</text>
+        <text class="msg-body">{{item.content}}</text>
+        <text class="msg-time">{{item.time}}</text>
+      </view>
+    </view>
+    <view class="empty-view" wx:if="{{messages.length === 0}}">
+      <text class="empty-text">暂无消息</text>
+    </view>
+  </view>
+</view>

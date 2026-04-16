@@ -1,0 +1,72 @@
+<!-- 保单记录 -->
+<view class="container">
+  <view class="filter-bar">
+    <view class="filter-item {{filterStatus === -1 ? 'filter-active' : ''}}" bindtap="setFilter" data-s="-1">全部</view>
+    <view class="filter-item {{filterStatus === 0 ? 'filter-active' : ''}}" bindtap="setFilter" data-s="0">待买家匹配</view>
+    <view class="filter-item {{filterStatus === 1 ? 'filter-active' : ''}}" bindtap="setFilter" data-s="1">待卖家确认</view>
+    <view class="filter-item {{filterStatus === 2 ? 'filter-active' : ''}}" bindtap="setFilter" data-s="2">已完成</view>
+    <view class="filter-item {{filterStatus === 3 ? 'filter-active' : ''}}" bindtap="setFilter" data-s="3">申诉中</view>
+  </view>
+
+  <view class="rec-list">
+    <view class="rec-card" wx:for="{{list}}" wx:key="id" bindtap="goDetail" data-id="{{item.id}}">
+      <view class="rec-card-header">
+        <text class="rec-order-id">{{item.id}}</text>
+        <view class="status-tag status-{{item.status}}">{{item.status_text || statusText[item.status]}}</view>
+      </view>
+
+      <view class="rec-body">
+        <view class="rec-row">
+          <text class="rk">兽王类型</text>
+          <text class="rv">{{item.pet_name || '待补充'}}</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">交易数量</text>
+          <text class="rv">{{item.trade_quantity || 1}} 只</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">地球猎人ID</text>
+          <text class="rv">{{item.seller_game_id || '未填写'}}</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">保单标价</text>
+          <text class="rv gem-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.gem_amount}}</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">卖家实扣</text>
+          <text class="rv"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.seller_total_cost}}</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">买家实收</text>
+          <text class="rv success-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.actual_receive}}</text>
+        </view>
+
+        <view class="rec-row">
+          <text class="rk">买家方块兽ID</text>
+          <text class="rv">{{item.buyer_beast_id || '等待买家匹配'}}</text>
+        </view>
+        <view class="rec-row" wx:if="{{item.buyer_trade_note}}">
+          <text class="rk">买家说明</text>
+          <text class="rv">{{item.buyer_trade_note}}</text>
+        </view>
+        <view class="rec-row">
+          <text class="rk">交易截图</text>
+          <text class="rv">{{item.buyer_proof_image ? '已上传' : '未上传'}}</text>
+        </view>
+      </view>
+
+      <text class="rec-desc">{{item.status_desc || '点击查看详情'}}</text>
+      <text class="rec-time">创建时间：{{item.create_time}}</text>
+      <text class="rec-time" wx:if="{{item.matched_time}}">匹配时间：{{item.matched_time}}</text>
+      <text class="rec-time" wx:if="{{item.buyer_proof_uploaded_time}}">截图上传：{{item.buyer_proof_uploaded_time}}</text>
+      <text class="rec-time" wx:if="{{item.auto_confirm_time && !item.seller_confirmed}}">自动完成：{{item.auto_confirm_time}}</text>
+      <text class="rec-time" wx:if="{{item.seller_confirmed_time}}">卖家确认：{{item.seller_confirmed_time}}</text>
+
+      <text class="rec-time" wx:if="{{item.finished_time}}">后台完成：{{item.finished_time}}</text>
+    </view>
+
+    <view class="empty-view" wx:if="{{list.length === 0}}">
+      <text class="empty-text">暂无保单记录</text>
+    </view>
+  </view>
+</view>

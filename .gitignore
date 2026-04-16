@@ -1,0 +1,24 @@
+# 敏感配置 —— 绝对不能上传
+deploy.conf
+fksapi/.env
+fksapi/config.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+fksapi/logs/
+fksapi/uploads/
+
+# Node
+node_modules/
+fksAdmin/dist/
+fksapi/admin/dist/
+
+# 系统
+.DS_Store
+Thumbs.db
+*.log
+node_cache/

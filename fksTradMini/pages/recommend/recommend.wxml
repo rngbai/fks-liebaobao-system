@@ -1,0 +1,70 @@
+<!-- 推荐分享 -->
+<view class="container">
+  <view class="rec-header">
+    <text class="rh-title">🌟 推荐分享</text>
+    <text class="rh-sub">{{headerSubText}}</text>
+  </view>
+
+  <view class="my-rec-card">
+    <view class="mrc-row">
+      <text class="mrc-label">累计邀请</text>
+      <text class="mrc-num">{{myRecommendCount}} 人</text>
+    </view>
+    <view class="mrc-row">
+      <text class="mrc-label">有效推荐</text>
+      <text class="mrc-num mrc-num-success">{{myEffectiveCount}} 人</text>
+    </view>
+    <view class="mrc-row">
+      <text class="mrc-label">待转化</text>
+      <text class="mrc-num mrc-num-warn">{{myPendingCount}} 人</text>
+    </view>
+    <view class="mrc-row">
+      <text class="mrc-label">累计获得奖励</text>
+      <text class="mrc-gem"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{myRewardGem}} 宝石</text>
+    </view>
+    <view class="mrc-row">
+      <text class="mrc-label">我的推荐码</text>
+      <view class="mrc-code-wrap">
+        <text class="mrc-code">{{myCodeText}}</text>
+        <view class="copy-code-btn" bindtap="copyCode">复制</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="share-btns">
+    <button class="btn-primary share-btn" open-type="share">分享给好友</button>
+  </view>
+
+  <view class="reward-rule-card">
+    <view class="rr-head">
+      <view class="rr-title">奖励规则</view>
+      <text class="rr-tip">按有效推荐人数自动发奖</text>
+    </view>
+    <view class="rr-item" wx:for="{{rules}}" wx:key="index">
+      <view>
+        <view class="rr-level">推荐 {{item.rangeText}} 人</view>
+        <view class="rr-label" wx:if="{{item.label}}">{{item.label}}</view>
+      </view>
+      <view class="rr-reward">奖励 <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.reward}} 宝石</view>
+    </view>
+  </view>
+
+  <view class="invited-section">
+    <text class="invited-title">我推荐的人</text>
+    <view class="invited-list">
+      <view class="invited-item" wx:for="{{invitedList}}" wx:key="id">
+        <view class="invited-main">
+          <text class="invited-nick">{{item.displayName}}</text>
+          <text class="invited-meta">{{item.metaText}}</text>
+        </view>
+        <view class="invited-side">
+          <text class="invited-time">{{item.timeText}}</text>
+          <text class="invited-status {{item.statusClass}}">{{item.statusLabel}}</text>
+        </view>
+      </view>
+      <view class="empty-view" wx:if="{{invitedList.length === 0}}">
+        <text class="empty-text">还没有推荐记录，快去分享吧</text>
+      </view>
+    </view>
+  </view>
+</view>

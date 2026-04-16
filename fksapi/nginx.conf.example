@@ -1,0 +1,87 @@
+# ============================================================
+# Nginx 反向代理配置 —— 方块兽担保系统
+# 将此文件复制到 /etc/nginx/sites-available/fks
+# 然后: sudo ln -s /etc/nginx/sites-available/fks /etc/nginx/sites-enabled/fks
+# sudo nginx -t && sudo systemctl reload nginx
+#
+# 说明：
+#   - 替换 your-domain.com 为你的真实域名
+#   - SSL 证书通过 certbot 自动申请（deploy.sh 中已含步骤）
+#   - 微信小程序要求后端必须 HTTPS + 443 端口
+# ============================================================
+
+# HTTP → HTTPS 强制跳转
+server {
+    listen 80;
+    listen [::]:80;
+    server_name your-domain.com;
+
+    # Certbot 验证目录（申请证书时使用）
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# HTTPS 主配置
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name your-domain.com;
+
+    # ---------- SSL ----------
+    ssl_certificate     /etc/letsencrypt/live/your-domain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 10m;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    # ---------- 安全响应头 ----------
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-Content-Type-Options nosniff;
+    add_header X-XSS-Protection "1; mode=block";
+
+    # ---------- 上传文件大小限制 ----------
+    client_max_body_size 10m;
+
+    # ---------- 反向代理到 Python 后端 ----------
+    location /api/ {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 30s;
+        proxy_connect_timeout 5s;
+    }
+
+    # ---------- 后台静态文件 ----------
+    location /admin/ {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_set_header   X-Real-IP $remote_addr;
+        proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+
+    # ---------- 上传图片 ----------
+    location /uploads/ {
+        proxy_pass         http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host $host;
+        proxy_cache_valid  200 7d;
+        expires 7d;
+        add_header Cache-Control "public, max-age=604800";
+    }
+
+    # ---------- 根路径默认跳转后台 ----------
+    location = / {
+        return 302 /admin/;
+    }
+}

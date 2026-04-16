@@ -1,0 +1,140 @@
+<!-- 担保单详情 -->
+<view class="container">
+
+  <!-- 状态横幅 -->
+  <view class="status-banner status-banner-{{order.status}}">
+    <text class="status-icon">{{statusIcon[order.status]}}</text>
+    <view class="status-info">
+      <text class="status-title">{{statusTitle[order.status]}}</text>
+      <text class="status-desc">{{statusDesc[order.status]}}</text>
+    </view>
+  </view>
+
+  <!-- 步骤条 -->
+  <view class="step-bar">
+    <view class="step-item {{order.status >= 0 ? 'done' : ''}}">
+      <view class="step-dot"></view>
+      <text class="step-label">卖家押金</text>
+    </view>
+    <view class="step-line {{order.status >= 1 ? 'line-done' : ''}}"></view>
+    <view class="step-item {{order.status >= 1 ? 'done' : ''}}">
+      <view class="step-dot"></view>
+      <text class="step-label">买家确认</text>
+    </view>
+    <view class="step-line {{order.status >= 2 ? 'line-done' : ''}}"></view>
+    <view class="step-item {{order.status >= 2 ? 'done' : ''}}">
+      <view class="step-dot"></view>
+      <text class="step-label">交易完成</text>
+    </view>
+  </view>
+
+  <!-- 订单基本信息 -->
+  <view class="info-card">
+    <view class="card-title">📄 担保单信息</view>
+
+    <view class="info-row">
+      <text class="info-key">订单号</text>
+      <view class="info-val-wrap">
+        <text class="info-val mono">{{order.id}}</text>
+        <text class="copy-btn" bindtap="copyOrderId">复制</text>
+      </view>
+    </view>
+    <view class="info-row">
+      <text class="info-key">卖家游戏ID</text>
+      <text class="info-val">{{order.game_id_seller}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.game_id_buyer}}">
+      <text class="info-key">买家游戏ID</text>
+      <text class="info-val">{{order.game_id_buyer}}</text>
+    </view>
+    <view class="info-row" wx:else>
+      <text class="info-key">买家游戏ID</text>
+      <text class="info-val gray">暂无（等待接单）</text>
+    </view>
+    <view class="info-row">
+      <text class="info-key">创建时间</text>
+      <text class="info-val">{{order.create_time}}</text>
+    </view>
+    <view class="info-row" wx:if="{{order.confirm_time}}">
+      <text class="info-key">确认时间</text>
+      <text class="info-val">{{order.confirm_time}}</text>
+    </view>
+  </view>
+
+  <!-- 宝石信息 -->
+  <view class="gem-card">
+    <view class="card-title"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> 宝石明细</view>
+    <view class="gem-row">
+      <view class="gem-item">
+        <text class="gem-label">约定返还</text>
+        <text class="gem-val">{{order.back_gem}}</text>
+      </view>
+      <view class="gem-divider"></view>
+      <view class="gem-item">
+        <text class="gem-label">手续费</text>
+        <text class="gem-val fee">{{order.fee_gem}}</text>
+      </view>
+      <view class="gem-divider"></view>
+      <view class="gem-item">
+        <text class="gem-label">总押额</text>
+        <text class="gem-val total">{{order.total_gem}}</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 截图凭证 -->
+  <view class="info-card" wx:if="{{order.screenshot}}">
+    <view class="card-title">📷 交易截图</view>
+    <image
+      class="screenshot"
+      src="{{order.screenshot}}"
+      mode="widthFix"
+      bindtap="previewScreenshot"
+    />
+  </view>
+
+  <!-- 操作区：买家接单（status=0 且非卖家） -->
+  <view class="action-card" wx:if="{{order.status === 0 && !isSeller}}">
+    <view class="action-title">接单说明</view>
+    <text class="action-desc">请输入您的游戏ID后接单，卖家确认后开始转账流程</text>
+    <view class="form-item">
+      <input
+        class="form-input"
+        placeholder="输入您的游戏ID"
+        value="{{buyerGameId}}"
+        bindinput="onBuyerIdInput"
+        maxlength="50"
+      />
+    </view>
+    <view class="btn-primary action-btn" bindtap="acceptOrder">接受此担保单</view>
+  </view>
+
+  <!-- 操作区：买家确认收货（status=1 且是买家） -->
+  <view class="action-card" wx:if="{{order.status === 1 && isBuyer}}">
+    <view class="action-title">⚠️ 请确认已收到宝石</view>
+    <text class="action-desc">确认后将释放卖家押金（扣除手续费），此操作不可撤销</text>
+    <view class="btn-primary action-btn confirm-btn" bindtap="confirmReceived">确认已收到宝石</view>
+    <view class="btn-appeal" bindtap="goAppeal">发起申诉</view>
+  </view>
+
+  <!-- 操作区：卖家等待（status=1 且是卖家） -->
+  <view class="action-card" wx:if="{{order.status === 1 && isSeller}}">
+    <view class="action-title">等待买家确认</view>
+    <text class="action-desc">请提醒买家确认收到宝石，如有问题可发起申诉</text>
+    <view class="btn-appeal" bindtap="goAppeal">发起申诉</view>
+  </view>
+
+  <!-- 完成状态 -->
+  <view class="done-card" wx:if="{{order.status === 2}}">
+    <text class="done-icon">✅</text>
+    <text class="done-text">交易已完成，感谢使用本平台</text>
+  </view>
+
+  <!-- 申诉状态 -->
+  <view class="appeal-card" wx:if="{{order.status === 3}}">
+    <text class="appeal-icon">⚠️</text>
+    <text class="appeal-text">申诉处理中，请等待平台审核</text>
+    <text class="appeal-sub">预计1-3个工作日内处理</text>
+  </view>
+
+</view>

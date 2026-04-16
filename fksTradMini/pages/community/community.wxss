@@ -1,0 +1,253 @@
+/* 社区名流页样式 */
+page { background: #F0F2FA; }
+
+.page {
+  min-height: 100vh;
+  background: #F0F2FA;
+  padding-bottom: 40rpx;
+}
+
+/* 信任横幅 */
+.trust-banner {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  background: linear-gradient(135deg, #5B6EF5, #7B8EFF);
+  padding: 20rpx 32rpx;
+}
+.trust-icon { font-size: 32rpx; }
+.trust-text {
+  font-size: 24rpx;
+  color: rgba(255,255,255,0.92);
+  letter-spacing: 0.5rpx;
+}
+
+/* 主分类 Tab */
+.cat-scroll {
+  background: #fff;
+  white-space: nowrap;
+  border-bottom: 1rpx solid #ECEEF8;
+}
+.cat-tabs {
+  display: inline-flex;
+  padding: 0 16rpx;
+}
+.cat-tab {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 20rpx 28rpx 16rpx;
+  gap: 6rpx;
+  position: relative;
+  transition: all 0.2s;
+}
+.cat-tab-icon { font-size: 36rpx; line-height: 1; }
+.cat-tab-label {
+  font-size: 24rpx;
+  color: #888;
+  white-space: nowrap;
+  font-weight: 500;
+}
+.cat-tab--active .cat-tab-label { color: #5B6EF5; font-weight: 700; }
+.cat-tab--active::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 40rpx; height: 4rpx;
+  background: #5B6EF5;
+  border-radius: 2rpx;
+}
+
+/* 子分类 Tab */
+.sub-scroll {
+  background: #fff;
+  white-space: nowrap;
+  padding: 12rpx 16rpx 16rpx;
+  border-bottom: 1rpx solid #ECEEF8;
+}
+.sub-tabs { display: inline-flex; gap: 16rpx; }
+.sub-tab {
+  display: inline-block;
+  padding: 10rpx 28rpx;
+  border-radius: 32rpx;
+  font-size: 24rpx;
+  color: #666;
+  background: #F0F2FA;
+  white-space: nowrap;
+  border: 2rpx solid transparent;
+  transition: all 0.2s;
+}
+.sub-tab--active {
+  color: #5B6EF5;
+  background: #EEF0FF;
+  border-color: #5B6EF5;
+  font-weight: 700;
+}
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 120rpx 40rpx;
+  gap: 16rpx;
+}
+.empty-icon { font-size: 80rpx; }
+.empty-title { font-size: 32rpx; font-weight: 700; color: #333; }
+.empty-desc { font-size: 26rpx; color: #999; }
+
+/* 卡片列表 */
+.card-list {
+  padding: 24rpx 24rpx 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.profile-card {
+  background: #fff;
+  border-radius: 20rpx;
+  overflow: hidden;
+  box-shadow: 0 4rpx 20rpx rgba(91,110,245,0.08);
+  position: relative;
+}
+
+/* 顶部彩色勋章条 */
+.card-ribbon {
+  height: 6rpx;
+}
+.card-ribbon.gold { background: linear-gradient(90deg, #FFD700, #FFA500); }
+.card-ribbon.silver { background: linear-gradient(90deg, #C0C0C0, #A8A8A8); }
+.card-ribbon.verified { background: linear-gradient(90deg, #5B6EF5, #7B8EFF); }
+.card-ribbon.streamer { background: linear-gradient(90deg, #FF6B9D, #FF8E53); }
+.card-ribbon.guild { background: linear-gradient(90deg, #00C896, #00A878); }
+
+.card-body {
+  display: flex;
+  padding: 24rpx;
+  gap: 24rpx;
+  align-items: flex-start;
+}
+
+/* 头像 */
+.avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.avatar-img {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 56rpx;
+  background: #EEF0FF;
+}
+.badge-icon {
+  position: absolute;
+  bottom: -6rpx; right: -6rpx;
+  width: 44rpx; height: 44rpx;
+  border-radius: 22rpx;
+  border: 3rpx solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22rpx;
+  line-height: 44rpx;
+  text-align: center;
+}
+.badge-icon.gold { background: linear-gradient(135deg, #FFD700, #FFA500); }
+.badge-icon.silver { background: linear-gradient(135deg, #E8E8E8, #C0C0C0); }
+.badge-icon.verified { background: linear-gradient(135deg, #5B6EF5, #7B8EFF); }
+.badge-icon.streamer { background: linear-gradient(135deg, #FF6B9D, #FF8E53); }
+.badge-icon.guild { background: linear-gradient(135deg, #00C896, #00A878); }
+
+/* 信息区 */
+.info-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex-wrap: wrap;
+}
+.name-text {
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #1A1A2E;
+}
+.badge-tag {
+  font-size: 20rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  font-weight: 700;
+  letter-spacing: 0.5rpx;
+}
+.badge-tag.gold { background: #FFF3CC; color: #B8860B; }
+.badge-tag.silver { background: #F0F0F0; color: #707070; }
+.badge-tag.verified { background: #EEF0FF; color: #5B6EF5; }
+.badge-tag.streamer { background: #FFF0F5; color: #FF6B9D; }
+.badge-tag.guild { background: #E8FFF7; color: #009966; }
+
+.game-tag {
+  font-size: 22rpx;
+  color: #5B6EF5;
+  background: #EEF0FF;
+  padding: 4rpx 16rpx;
+  border-radius: 16rpx;
+  align-self: flex-start;
+}
+.bio-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 联系按钮 */
+.contact-row {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 4rpx;
+}
+.contact-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 8rpx 20rpx;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+.wechat-btn { background: #E8F8F0; }
+.wechat-btn .contact-label { color: #07C160; }
+.qq-btn { background: #E8F0FF; }
+.qq-btn .contact-label { color: #1677FF; }
+.contact-icon { font-size: 26rpx; }
+
+/* 申请入驻 */
+.apply-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  margin: 40rpx 24rpx 0;
+  padding: 28rpx;
+  background: #fff;
+  border-radius: 20rpx;
+  border: 2rpx dashed #C8CCFF;
+}
+.apply-text { font-size: 28rpx; color: #888; }
+.apply-btn {
+  font-size: 28rpx;
+  color: #5B6EF5;
+  font-weight: 700;
+}
+
+.bottom-safe { height: 60rpx; }

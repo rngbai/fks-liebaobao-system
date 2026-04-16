@@ -1,0 +1,97 @@
+<!-- 社区名流 -->
+<view class="page">
+
+  <!-- 顶部说明横幅 -->
+  <view class="trust-banner">
+    <text class="trust-icon">🛡️</text>
+    <text class="trust-text">经平台审核认证的真实名流，拒绝骗子广告</text>
+  </view>
+
+  <!-- 主分类 Tab -->
+  <scroll-view class="cat-scroll" scroll-x scroll-with-animation>
+    <view class="cat-tabs">
+      <view
+        wx:for="{{categories}}"
+        wx:key="id"
+        class="cat-tab {{activeCat === item.id ? 'cat-tab--active' : ''}}"
+        bindtap="switchCat"
+        data-id="{{item.id}}"
+      >
+        <text class="cat-tab-icon">{{item.icon}}</text>
+        <text class="cat-tab-label">{{item.label}}</text>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 子分类 Tab -->
+  <scroll-view class="sub-scroll" scroll-x scroll-with-animation wx:if="{{currentSubTabs.length > 0}}">
+    <view class="sub-tabs">
+      <view
+        wx:for="{{currentSubTabs}}"
+        wx:key="*this"
+        class="sub-tab {{activeSub === item ? 'sub-tab--active' : ''}}"
+        bindtap="switchSub"
+        data-sub="{{item}}"
+      >{{item}}</view>
+    </view>
+  </scroll-view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{!loading && currentList.length === 0}}">
+    <text class="empty-icon">🏆</text>
+    <text class="empty-title">暂无认证名流</text>
+    <text class="empty-desc">该板块正在招募，敬请期待</text>
+  </view>
+
+  <!-- 名流卡片列表 -->
+  <view class="card-list" wx:if="{{currentList.length > 0}}">
+    <view
+      wx:for="{{currentList}}"
+      wx:key="id"
+      class="profile-card"
+      bindtap="onCardTap"
+      data-id="{{item.id}}"
+    >
+      <!-- 顶部勋章条 -->
+      <view class="card-ribbon {{item.badgeType}}"></view>
+
+      <view class="card-body">
+        <!-- 头像区 -->
+        <view class="avatar-wrap">
+          <image class="avatar-img" src="{{item.avatar || '/assets/default_avatar.png'}}" mode="aspectFill"/>
+          <view class="badge-icon {{item.badgeType}}">{{item.badgeIcon}}</view>
+        </view>
+
+        <!-- 信息区 -->
+        <view class="info-wrap">
+          <view class="name-row">
+            <text class="name-text">{{item.nickname}}</text>
+            <view class="badge-tag {{item.badgeType}}">{{item.badgeLabel}}</view>
+          </view>
+          <text class="game-tag" wx:if="{{item.gameTag}}">{{item.gameTag}}</text>
+          <text class="bio-text">{{item.bio}}</text>
+
+          <!-- 联系方式 -->
+          <view class="contact-row">
+            <view class="contact-btn wechat-btn" wx:if="{{item.wechat}}" catchtap="copyContact" data-val="{{item.wechat}}" data-label="微信">
+              <text class="contact-icon">💬</text>
+              <text class="contact-label">微信</text>
+            </view>
+            <view class="contact-btn qq-btn" wx:if="{{item.qq}}" catchtap="copyContact" data-val="{{item.qq}}" data-label="QQ">
+              <text class="contact-icon">🐧</text>
+              <text class="contact-label">QQ</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 申请入驻 -->
+  <view class="apply-bar">
+    <text class="apply-text">想加入名流榜？</text>
+    <view class="apply-btn" bindtap="goApply">申请认证 →</view>
+  </view>
+
+  <view class="bottom-safe"></view>
+</view>

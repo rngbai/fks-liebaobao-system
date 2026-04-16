@@ -1,0 +1,70 @@
+<!-- 市场挂单详情 -->
+<view class="container">
+
+  <!-- 类型标识 -->
+  <view class="type-banner {{detailType === 'sell' ? 'sell-banner' : 'buy-banner'}}">
+    <text class="type-banner-text">{{detailType === 'sell' ? '🏷️ 出售信息' : '🛒 求购信息'}}</text>
+  </view>
+
+  <!-- 挂单详情 -->
+  <view class="detail-card">
+    <view class="detail-title-text">{{item.title}}</view>
+    <view class="detail-row">
+      <text class="dk">{{detailType === 'sell' ? '出售数量' : '需要数量'}}</text>
+      <text class="dv">{{item.quantity}} 只</text>
+    </view>
+    <view class="detail-row">
+      <text class="dk">单价</text>
+      <text class="dv price-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.price_per}} 宝石/只</text>
+    </view>
+    <view class="detail-row">
+      <text class="dk">总价</text>
+      <text class="dv total-price"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.quantity * item.price_per}} 宝石</text>
+    </view>
+    <view class="detail-row" wx:if="{{item.desc}}">
+      <text class="dk">描述</text>
+      <text class="dv desc-val">{{item.desc}}</text>
+    </view>
+    <view class="detail-row">
+      <text class="dk">发布时间</text>
+      <text class="dv">{{item.create_time}}</text>
+    </view>
+  </view>
+
+  <!-- 联系方式 -->
+  <view class="contact-card">
+    <view class="contact-title">📞 联系方式</view>
+    <view class="contact-tip">请私信确认交易细节后，再通过小程序生成担保单保障安全</view>
+    <view class="contact-row" wx:if="{{item.qq}}">
+      <view class="contact-icon-wrap qq-bg">
+        <text class="contact-icon">QQ</text>
+      </view>
+      <view class="contact-info">
+        <text class="contact-label">QQ号</text>
+        <text class="contact-val">{{item.qq}}</text>
+      </view>
+      <view class="copy-contact-btn" bindtap="copyContact" data-val="{{item.qq}}" data-label="QQ号">复制</view>
+    </view>
+    <view class="contact-row" wx:if="{{item.wechat}}">
+      <view class="contact-icon-wrap wx-bg">
+        <text class="contact-icon">微</text>
+      </view>
+      <view class="contact-info">
+        <text class="contact-label">微信号</text>
+        <text class="contact-val">{{item.wechat}}</text>
+      </view>
+      <view class="copy-contact-btn" bindtap="copyContact" data-val="{{item.wechat}}" data-label="微信号">复制</view>
+    </view>
+  </view>
+
+  <!-- 担保提示 -->
+  <view class="guarantee-tip-card">
+    <view class="gtip-header">
+      <text class="gtip-icon">🛡️</text>
+      <text class="gtip-title">交易安全提醒</text>
+    </view>
+    <text class="gtip-content">交易需谨慎，聊好价格后如需担保，切记让卖家在小程序生成保单，由小程序进行担保，安全交易！谨防跑路狗</text>
+    <view class="btn-primary gtip-btn" bindtap="goGuarantee">去生成担保单</view>
+  </view>
+
+</view>

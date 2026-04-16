@@ -1,0 +1,117 @@
+.container {
+  background: #F5F6FA;
+  min-height: 100vh;
+  padding-bottom: 60rpx;
+}
+
+/* Tab */
+.market-tab {
+  display: flex;
+  background: #fff;
+  padding: 0 24rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+.mkt-tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 28rpx 0;
+  font-size: 28rpx;
+  color: #999;
+  font-weight: 500;
+  border-bottom: 4rpx solid transparent;
+}
+.mkt-tab-item.active { color: #5B6EF5; font-weight: 700; border-bottom-color: #5B6EF5; }
+
+/* 安全提示 */
+.safe-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  background: #FFF3E0;
+  border-left: 6rpx solid #FF9800;
+  padding: 18rpx 20rpx;
+  margin: 16rpx 24rpx 0;
+  border-radius: 12rpx;
+}
+.safe-icon { font-size: 26rpx; flex-shrink: 0; margin-top: 2rpx; }
+.safe-text { font-size: 22rpx; color: #888; line-height: 1.6; }
+
+/* 发布栏 */
+.publish-bar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx 24rpx;
+}
+.publish-btn {
+  background: linear-gradient(135deg, #5B6EF5, #8B5CF6);
+  color: #fff;
+  border-radius: 40rpx;
+  padding: 16rpx 40rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+.publish-limit { font-size: 22rpx; color: #bbb; }
+
+/* 列表 */
+.mkt-list { padding: 0 24rpx; }
+.mkt-card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 16rpx;
+  border-left: 6rpx solid #5B6EF5;
+  box-shadow: 0 2rpx 10rpx rgba(91,110,245,0.07);
+}
+.mkt-card-buy { border-left-color: #10B981; }
+.mkt-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12rpx; }
+.mkt-type-tag { border-radius: 20rpx; padding: 6rpx 20rpx; font-size: 22rpx; font-weight: 600; }
+.sell-tag { background: #EEF0FF; color: #5B6EF5; }
+.buy-tag { background: #ECFDF5; color: #10B981; }
+.mkt-gem { display: flex; align-items: baseline; gap: 2rpx; }
+.mkt-gem-num { font-size: 44rpx; font-weight: 900; color: #8B5CF6; }
+.mkt-gem-unit { font-size: 22rpx; color: #999; }
+.mkt-title { font-size: 30rpx; font-weight: 700; color: #222; margin-bottom: 16rpx; }
+.mkt-body { margin-bottom: 16rpx; }
+.mkt-row { display: flex; gap: 16rpx; margin-bottom: 8rpx; }
+.mkt-key { font-size: 24rpx; color: #999; min-width: 80rpx; }
+.mkt-val { font-size: 26rpx; color: #444; font-weight: 500; }
+.mkt-footer { display: flex; justify-content: space-between; align-items: center; border-top: 1rpx solid #f5f5f5; padding-top: 16rpx; }
+.mkt-time { font-size: 22rpx; color: #bbb; }
+.mkt-contact-hint { font-size: 22rpx; color: #5B6EF5; font-weight: 600; }
+.buy-hint { color: #10B981; }
+
+.empty-view { display: flex; flex-direction: column; align-items: center; padding: 80rpx 0; gap: 16rpx; }
+.empty-icon { font-size: 80rpx; }
+.empty-text { color: #bbb; font-size: 28rpx; }
+.empty-btn { padding: 0 60rpx; }
+
+/* 兼容性兜底：避免 gap 在部分微信基础库失效 */
+.safe-text {
+  margin-left: 12rpx;
+}
+
+.publish-btn {
+  flex-shrink: 0;
+}
+
+.publish-limit {
+  margin-left: 16rpx;
+}
+
+.mkt-gem-num {
+  margin-left: 6rpx;
+}
+
+.mkt-key {
+  width: 90rpx;
+  flex-shrink: 0;
+}
+
+.empty-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+

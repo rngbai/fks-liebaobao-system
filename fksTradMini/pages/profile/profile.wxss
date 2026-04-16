@@ -1,0 +1,18 @@
+.container { background: #F5F6FA; min-height: 100vh; padding-bottom: 60rpx; }
+.avatar-section { background: linear-gradient(135deg,#5B6EF5,#8B5CF6); padding: 40rpx; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 12rpx; }
+.avatar-btn { padding: 0; margin: 0; background: transparent; line-height: normal; border-radius: 0; }
+.avatar-btn::after { border: none; }
+.big-avatar { width: 160rpx; height: 160rpx; border-radius: 80rpx; border: 4rpx solid rgba(255,255,255,0.5); }
+.avatar-edit { font-size: 22rpx; color: rgba(255,255,255,0.85); background: rgba(0,0,0,0.2); border-radius: 20rpx; padding: 6rpx 20rpx; }
+.avatar-tip { margin-top: 16rpx; font-size: 22rpx; line-height: 1.6; color: rgba(255,255,255,0.82); text-align: center; }
+.form-card { background: #fff; margin: 20rpx 24rpx 0; border-radius: 16rpx; overflow: hidden; }
+.form-item { display: flex; align-items: center; padding: 28rpx 24rpx; border-bottom: 1rpx solid #f5f5f5; }
+.form-item:last-child, .form-item.no-border { border-bottom: none; }
+.fi-label { font-size: 26rpx; color: #666; min-width: 180rpx; flex-shrink: 0; }
+.fi-input { flex: 1; font-size: 28rpx; color: #333; text-align: right; }
+.fi-arrow { font-size: 32rpx; color: #ccc; }
+.form-note { display: block; margin: 20rpx 24rpx 0; font-size: 22rpx; line-height: 1.7; color: #6B7280; }
+.submit-wrap { padding: 32rpx 24rpx 0; }
+.save-btn { height: 90rpx; line-height: 90rpx; border-radius: 45rpx; text-align: center; font-size: 30rpx; font-weight: 700; }
+

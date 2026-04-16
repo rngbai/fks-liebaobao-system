@@ -1,0 +1,70 @@
+<!-- 申诉页面 -->
+<view class="container">
+
+  <view class="alert-box">
+    <text class="alert-icon">⚠️</text>
+    <text class="alert-text">申诉提交后，平台将在1-3个工作日内处理，请如实填写</text>
+  </view>
+
+  <view class="form-card">
+    <view class="section-title">申诉信息</view>
+
+    <view class="form-item">
+      <view class="form-label">订单号</view>
+      <view class="readonly-input">{{orderId}}</view>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label required">申诉原因</view>
+      <view class="reason-list">
+        <view
+          class="reason-item {{appealReason === item ? 'selected' : ''}}"
+          wx:for="{{reasons}}"
+          wx:key="*this"
+          wx:for-item="item"
+          bindtap="selectReason"
+          data-reason="{{item}}"
+        >{{item}}</view>
+      </view>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label required">详细描述</view>
+      <textarea
+        class="textarea"
+        placeholder="请详细描述问题，如：已转账但对方未确认等..."
+        value="{{description}}"
+        bindinput="onDescInput"
+        maxlength="300"
+        auto-height
+      />
+      <text class="word-count">{{description.length}}/300</text>
+    </view>
+
+    <view class="form-item">
+      <view class="form-label">补充截图</view>
+      <view class="upload-row">
+        <view
+          class="upload-thumb"
+          wx:for="{{appealImages}}"
+          wx:key="index"
+        >
+          <image class="thumb-img" src="{{item}}" mode="aspectFill" bindtap="previewImg" data-src="{{item}}" />
+          <text class="del-btn" catchtap="delImg" data-index="{{index}}">✕</text>
+        </view>
+        <view class="upload-add" bindtap="addImage" wx:if="{{appealImages.length < 3}}">
+          <text class="add-icon">＋</text>
+        </view>
+      </view>
+      <text class="upload-tip">最多3张</text>
+    </view>
+  </view>
+
+  <view class="submit-wrap">
+    <view
+      class="submit-btn {{canSubmit ? 'active' : 'disabled'}}"
+      bindtap="submitAppeal"
+    >提交申诉</view>
+  </view>
+
+</view>

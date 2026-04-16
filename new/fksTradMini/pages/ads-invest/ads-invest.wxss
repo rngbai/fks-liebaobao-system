@@ -1,0 +1,21 @@
+.container { background: #F5F6FA; min-height: 100vh; padding-bottom: 60rpx; }
+.ads-header { background: linear-gradient(135deg,#5B6EF5,#8B5CF6); padding: 48rpx 32rpx; }
+.ads-title { display: block; font-size: 40rpx; font-weight: 800; color: #fff; margin-bottom: 12rpx; }
+.ads-sub { font-size: 24rpx; color: rgba(255,255,255,0.8); }
+.ads-intro-card { background: #fff; margin: 20rpx 24rpx 0; border-radius: 16rpx; padding: 28rpx 24rpx; }
+.ai-row { display: flex; align-items: flex-start; gap: 16rpx; margin-bottom: 20rpx; }
+.ai-icon { font-size: 36rpx; }
+.ai-content {}
+.ai-name { display: block; font-size: 28rpx; font-weight: 700; color: #222; margin-bottom: 6rpx; }
+.ai-desc { font-size: 22rpx; color: #888; }
+.ai-price-row { display: flex; justify-content: space-between; align-items: center; border-top: 1rpx solid #f5f5f5; padding-top: 16rpx; }
+.ai-price-label { font-size: 24rpx; color: #999; }
+.ai-price { font-size: 28rpx; font-weight: 700; color: #5B6EF5; }
+.ads-form-card { background: #fff; margin: 20rpx 24rpx 0; border-radius: 16rpx; overflow: hidden; }
+.form-item { display: flex; align-items: center; padding: 28rpx 24rpx; border-bottom: 1rpx solid #f5f5f5; }
+.form-item:last-child { border-bottom: none; }
+.fi-label { font-size: 26rpx; color: #666; min-width: 120rpx; flex-shrink: 0; }
+.fi-input { flex: 1; font-size: 26rpx; color: #333; text-align: right; }
+.submit-wrap { padding: 32rpx 24rpx 0; }
+.ads-submit { height: 90rpx; line-height: 90rpx; border-radius: 45rpx; text-align: center; font-size: 30rpx; font-weight: 700; }
+.ads-note { display: block; text-align: center; font-size: 22rpx; color: #bbb; padding: 16rpx; }

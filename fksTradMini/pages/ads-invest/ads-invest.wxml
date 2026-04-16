@@ -1,0 +1,41 @@
+<!-- 广告投放 -->
+<view class="container">
+  <view class="ads-header">
+    <text class="ads-title">📢 广告投放</text>
+    <text class="ads-sub">在首页横幅区域投放您的广告，精准触达玩家</text>
+  </view>
+
+  <view class="ads-intro-card">
+    <view class="ai-row">
+      <text class="ai-icon">📍</text>
+      <view class="ai-content">
+        <text class="ai-name">首页横幅广告位</text>
+        <text class="ai-desc">首页顶部轮播，每次进入首页必曝光，共3个广告位</text>
+      </view>
+    </view>
+    <view class="ai-price-row">
+      <text class="ai-price-label">投放价格</text>
+      <text class="ai-price">联系管理员定价</text>
+    </view>
+  </view>
+
+  <view class="ads-form-card">
+    <view class="form-item">
+      <text class="fi-label">广告标题</text>
+      <input class="fi-input" placeholder="请输入广告标题（最多20字）" value="{{form.title}}" bindinput="onInput" data-field="title" maxlength="20" placeholder-style="color:#bbb"/>
+    </view>
+    <view class="form-item">
+      <text class="fi-label">广告描述</text>
+      <input class="fi-input" placeholder="一句话描述（最多30字）" value="{{form.sub}}" bindinput="onInput" data-field="sub" maxlength="30" placeholder-style="color:#bbb"/>
+    </view>
+    <view class="form-item">
+      <text class="fi-label">联系方式</text>
+      <input class="fi-input" placeholder="QQ或微信" value="{{form.contact}}" bindinput="onInput" data-field="contact" placeholder-style="color:#bbb"/>
+    </view>
+  </view>
+
+  <view class="submit-wrap">
+    <view class="btn-primary ads-submit" bindtap="submitAds">提交投放申请</view>
+  </view>
+  <text class="ads-note">提交后管理员审核，审核通过后联系您确认价格并上线</text>
+</view>
