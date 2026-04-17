@@ -175,7 +175,7 @@ async function pollQrStatus() {
     const data = await api.get(`/api/manage/token-config/qr-status?session=${qrSessionId.value}`)
     if (data.status === 'waiting') return
     stopQrPolling()
-    if (data.ok && data.autoSaved) {
+    if (data.autoSaved) {
       qrStatus.value = 'success'
       Object.assign(config, data)
       emit('count-change', config.isExpired ? 1 : 0)
@@ -195,8 +195,18 @@ async function pollQrStatus() {
       qrStatus.value = 'error'
       qrError.value = data.message || '登录失败'
     }
-  } catch {
-    // 忽略轮询错误，继续等待
+  } catch (err) {
+    const payload = err?.payload || {}
+    if (payload.status === 'timeout') {
+      stopQrPolling()
+      qrStatus.value = 'timeout'
+      return
+    }
+    if (payload.status === 'error') {
+      stopQrPolling()
+      qrStatus.value = 'error'
+      qrError.value = payload.message || err.message || '登录失败'
+    }
   }
 }
 
