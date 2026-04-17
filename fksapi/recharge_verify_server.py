@@ -31,8 +31,10 @@ from urllib.parse import parse_qs, urlparse
 from config import token, userId
 from db_mysql import (
     DEFAULT_CANCEL_LIMIT,
+    FEEDBACK_SCENE_COMMUNITY_APPLY,
     bind_user_inviter,
     build_feedback_payload,
+
     build_home_content_payload,
     build_manage_dashboard,
     build_manage_feedback_payload,
@@ -772,12 +774,20 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             return payload
 
 
-    def get_feedback_payload(self, user_key, profile=None, limit=20, mine_only=False):
+    def get_feedback_payload(self, user_key, profile=None, limit=20, mine_only=False, feedback_type=None, scene=''):
         with get_connection(autocommit=False) as conn:
             user_row, _ = get_or_create_user(conn, user_key, profile)
-            payload = build_feedback_payload(conn, user_row, limit=limit, mine_only=mine_only)
+            payload = build_feedback_payload(
+                conn,
+                user_row,
+                limit=limit,
+                mine_only=mine_only,
+                feedback_type=feedback_type,
+                scene=scene,
+            )
             conn.commit()
             return payload
+
 
     def get_promotion_payload(self, user_key, profile=None, limit=20):
         with get_connection(autocommit=False) as conn:
@@ -966,13 +976,24 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
         if parsed.path == '/api/feedback/list':
             limit = max(1, to_int(params.get('limit', ['20'])[0], 20))
+            scene = str(params.get('scene', [''])[0] or '').strip()
+            feedback_type = str(params.get('type', [''])[0] or '').strip() or None
             mine_only = str(params.get('mine', ['0'])[0] or '').strip().lower() in ('1', 'true', 'yes', 'mine')
+            if str(scene or '').strip().lower().replace('-', '_') == FEEDBACK_SCENE_COMMUNITY_APPLY:
+                mine_only = True
             try:
-                data = self.get_feedback_payload(user_key, limit=limit, mine_only=mine_only)
+                data = self.get_feedback_payload(
+                    user_key,
+                    limit=limit,
+                    mine_only=mine_only,
+                    feedback_type=feedback_type,
+                    scene=scene,
+                )
                 build_json(self, 200, ok(data, '查询成功'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取反馈列表失败: {exc}'})
             return
+
 
         if parsed.path == '/api/promotion/my':
             limit = max(1, to_int(params.get('limit', ['20'])[0], 20))
@@ -1403,18 +1424,42 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             title = str(payload.get('title') or '').strip()
             content = str(payload.get('content') or payload.get('desc') or '').strip()
             contact = str(payload.get('contact') or '').strip()
+            scene = str(payload.get('scene') or '').strip()
+            extra_context = {
+                'category': payload.get('category'),
+                'category_label': payload.get('category_label') or payload.get('categoryLabel'),
+                'sub_tab': payload.get('sub_tab') or payload.get('subTab'),
+            }
             limit = max(1, to_int(payload.get('limit'), 20))
+            normalized_scene = str(scene or '').strip().lower().replace('-', '_')
             try:
                 with get_connection(autocommit=False) as conn:
                     user_row, _ = get_or_create_user(conn, user_key, profile)
-                    feedback_row = create_feedback(conn, user_row, feedback_type, title, content, contact=contact)
-                    data = build_feedback_payload(conn, user_row, limit=limit, mine_only=False)
+                    feedback_row = create_feedback(
+                        conn,
+                        user_row,
+                        feedback_type,
+                        title,
+                        content,
+                        contact=contact,
+                        scene=scene,
+                        extra_context=extra_context,
+                    )
+                    data = build_feedback_payload(
+                        conn,
+                        user_row,
+                        limit=limit,
+                        mine_only=normalized_scene == FEEDBACK_SCENE_COMMUNITY_APPLY,
+                        feedback_type=feedback_type,
+                        scene=scene,
+                    )
                     data['created'] = serialize_feedback_row(feedback_row, viewer_user_id=user_row['id'])
                     conn.commit()
                 build_json(self, 200, ok(data, '反馈已提交'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'提交反馈失败: {exc}'})
             return
+
 
         if parsed.path == '/api/upload/image':
             image_base64 = str(payload.get('image_base64') or payload.get('imageBase64') or '').strip()

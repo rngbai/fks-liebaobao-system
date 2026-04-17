@@ -18,7 +18,14 @@ DEFAULT_GUARANTEE_FEE = 1
 DEFAULT_TRANSFER_OUT_DAILY_LIMIT = 10
 DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS = 50
 DEFAULT_FEEDBACK_DAILY_LIMIT = 3
+DEFAULT_COMMUNITY_APPLY_DAILY_LIMIT = 2
+FEEDBACK_TYPE_COMMUNITY_APPLY = '社区认证申请'
+FEEDBACK_SCENE_COMMUNITY_APPLY = 'community_apply'
+FEEDBACK_TYPE_DAILY_LIMITS = {
+    FEEDBACK_TYPE_COMMUNITY_APPLY: DEFAULT_COMMUNITY_APPLY_DAILY_LIMIT,
+}
 # 2级分销：每单双方各扣1宝石，拿出50%做推广激励（共1宝石/单）
+
 PROMO_COMMISSION_L1_X10 = 8    # 一级分佣 0.8 宝石 (×10 存储)
 PROMO_COMMISSION_L2_X10 = 2    # 二级分佣 0.2 宝石 (×10 存储)
 PROMO_FIRST_ORDER_BONUS = 2    # 新人首单奖励 2 宝石（整数）
@@ -1044,7 +1051,56 @@ def get_feedback_meta(status):
 
 
 
+def normalize_feedback_scene(scene=''):
+    return str(scene or '').strip().lower().replace('-', '_')
+
+
+
+def normalize_feedback_type(feedback_type, scene=''):
+    normalized_scene = normalize_feedback_scene(scene)
+    if normalized_scene == FEEDBACK_SCENE_COMMUNITY_APPLY:
+        return FEEDBACK_TYPE_COMMUNITY_APPLY
+    return str(feedback_type or '其他').strip()[:32] or '其他'
+
+
+
+def get_feedback_daily_limit(feedback_type=''):
+    normalized_type = str(feedback_type or '').strip()
+    return int(FEEDBACK_TYPE_DAILY_LIMITS.get(normalized_type, DEFAULT_FEEDBACK_DAILY_LIMIT))
+
+
+
+def build_feedback_context_text(scene='', extra_context=None):
+    normalized_scene = normalize_feedback_scene(scene)
+    if normalized_scene != FEEDBACK_SCENE_COMMUNITY_APPLY:
+        return ''
+    source = extra_context or {}
+    category_label = str(source.get('category_label') or source.get('categoryLabel') or source.get('category') or '').strip()
+    sub_tab = str(source.get('sub_tab') or source.get('subTab') or '').strip()
+    lines = ['申请场景：社区名流认证']
+    if category_label:
+        lines.append(f'主分类：{category_label}')
+    if sub_tab:
+        lines.append(f'子分类：{sub_tab}')
+    return '\n'.join(lines)
+
+
+
+def append_feedback_context(content, scene='', extra_context=None):
+    base_content = str(content or '').strip()
+    context_text = build_feedback_context_text(scene=scene, extra_context=extra_context)
+    if not context_text:
+        return base_content[:500]
+    suffix = f'【系统附加信息】\n{context_text}'
+    if suffix in base_content:
+        return base_content[:500]
+    merged = f'{base_content}\n\n{suffix}' if base_content else suffix
+    return merged[:500].rstrip()
+
+
+
 def serialize_feedback_row(row, viewer_user_id=None):
+
     if not row:
         return None
     status = row.get('status') or FEEDBACK_STATUS_PENDING
@@ -1094,22 +1150,28 @@ def find_feedback_entry_for_update(conn, feedback_id):
 
 
 
-def count_today_feedbacks(conn, user_id):
+def count_today_feedbacks(conn, user_id, feedback_type=None):
+    conditions = ['user_id=%s', 'DATE(created_at)=CURDATE()']
+    params = [user_id]
+    if feedback_type:
+        conditions.append('feedback_type=%s')
+        params.append(str(feedback_type))
+    where_sql = ' AND '.join(conditions)
     with conn.cursor() as cursor:
         cursor.execute(
-            '''
+            f'''
             SELECT COUNT(*) AS total
             FROM user_feedback
-            WHERE user_id=%s AND DATE(created_at)=CURDATE()
+            WHERE {where_sql}
             ''',
-            (user_id,)
+            tuple(params)
         )
         row = cursor.fetchone() or {}
     return int(row.get('total') or 0)
 
 
 
-def list_feedback_entries(conn, limit=20, user_id=None, status=None):
+def list_feedback_entries(conn, limit=20, user_id=None, status=None, feedback_type=None):
     limit = max(1, min(100, int(limit)))
     conditions = []
     params = []
@@ -1119,6 +1181,9 @@ def list_feedback_entries(conn, limit=20, user_id=None, status=None):
     if status:
         conditions.append('f.status=%s')
         params.append(str(status))
+    if feedback_type:
+        conditions.append('f.feedback_type=%s')
+        params.append(str(feedback_type))
     where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ''
 
     with conn.cursor() as cursor:
@@ -1137,22 +1202,38 @@ def list_feedback_entries(conn, limit=20, user_id=None, status=None):
 
 
 
-def create_feedback(conn, user_row, feedback_type, title, content, contact=''):
-    feedback_type = str(feedback_type or '其他').strip()[:32] or '其他'
+def create_feedback(conn, user_row, feedback_type, title, content, contact='', scene='', extra_context=None):
+    normalized_scene = normalize_feedback_scene(scene)
+    feedback_type = normalize_feedback_type(feedback_type, normalized_scene)
     title = str(title or '').strip()[:120]
     content = str(content or '').strip()[:500]
     contact = str(contact or '').strip()[:64]
 
     if len(title) < 2:
         raise ValueError('请填写反馈标题')
-    if len(content) < 5:
+
+    min_content_length = 10 if normalized_scene == FEEDBACK_SCENE_COMMUNITY_APPLY else 5
+    if len(content) < min_content_length:
+        if normalized_scene == FEEDBACK_SCENE_COMMUNITY_APPLY:
+            raise ValueError('申请认证请尽量写详细一点，至少 10 个字')
         raise ValueError('请尽量详细描述问题，至少 5 个字')
+
+    if normalized_scene == FEEDBACK_SCENE_COMMUNITY_APPLY and len(contact) < 2:
+        raise ValueError('申请认证请填写联系方式，方便审核联系')
+
+    type_daily_limit = get_feedback_daily_limit(feedback_type)
+    type_today_count = count_today_feedbacks(conn, user_row['id'], feedback_type=feedback_type)
+    if type_today_count >= type_daily_limit:
+        if feedback_type == FEEDBACK_TYPE_COMMUNITY_APPLY:
+            raise ValueError(f'社区名流认证申请每天最多提交 {type_daily_limit} 次，请明天再试')
+        raise ValueError(f'该类型反馈每天最多提交 {type_daily_limit} 次，请明天再试')
 
     today_count = count_today_feedbacks(conn, user_row['id'])
     if today_count >= DEFAULT_FEEDBACK_DAILY_LIMIT:
         raise ValueError(f'每天最多提交 {DEFAULT_FEEDBACK_DAILY_LIMIT} 次反馈，请明天再试')
 
     with conn.cursor() as cursor:
+
         cursor.execute(
             '''
             INSERT INTO user_feedback (user_id, feedback_type, title, content, contact, status)
@@ -1170,6 +1251,7 @@ def create_feedback(conn, user_row, feedback_type, title, content, contact=''):
         feedback_id = cursor.lastrowid
 
     return find_feedback_entry(conn, feedback_id)
+
 
 
 
@@ -1213,19 +1295,30 @@ def update_feedback_status(conn, feedback_id, status, admin_reply=''):
 
 
 
-def build_feedback_payload(conn, user_row, limit=20, mine_only=False):
-    today_count = count_today_feedbacks(conn, user_row['id'])
-    rows = list_feedback_entries(conn, limit=limit, user_id=user_row['id'] if mine_only else None)
+def build_feedback_payload(conn, user_row, limit=20, mine_only=False, feedback_type=None, scene=''):
+    normalized_scene = normalize_feedback_scene(scene)
+    scoped_type = normalize_feedback_type(feedback_type, normalized_scene) if (feedback_type or normalized_scene) else None
+    daily_limit = get_feedback_daily_limit(scoped_type) if scoped_type else DEFAULT_FEEDBACK_DAILY_LIMIT
+    today_count = count_today_feedbacks(conn, user_row['id'], feedback_type=scoped_type)
+    rows = list_feedback_entries(
+        conn,
+        limit=limit,
+        user_id=user_row['id'] if mine_only else None,
+        feedback_type=scoped_type,
+    )
     return {
         'user': serialize_user(user_row),
         'feedback': {
-            'dailyLimit': DEFAULT_FEEDBACK_DAILY_LIMIT,
+            'scene': normalized_scene,
+            'feedbackType': scoped_type or '',
+            'dailyLimit': daily_limit,
             'todayCount': today_count,
-            'remainingCount': max(0, DEFAULT_FEEDBACK_DAILY_LIMIT - today_count),
+            'remainingCount': max(0, daily_limit - today_count),
             'mineOnly': bool(mine_only),
             'list': [serialize_feedback_row(row, viewer_user_id=user_row['id']) for row in rows],
         }
     }
+
 
 
 
