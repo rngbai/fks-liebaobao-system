@@ -4630,6 +4630,49 @@ def save_game_config(conn, user_id, token, token_type='fks', user_name=''):
     )
 
 
+def patch_game_config(conn, user_id=None, token=None, token_type=None, user_name=None):
+    """
+    部分更新游戏凭证配置：
+    - userId / token / userName / tokenType 任意字段可单独更新
+    - 未传字段沿用现有值
+    """
+    current = build_game_config_payload(conn, env_user_id='', env_token='', env_token_type='fks', env_user_name='')
+    next_user_id = str(current.get('userId') or '').strip()
+    next_token = str(current.get('tokenFull') or '').strip()
+    next_user_name = str(current.get('userName') or '').strip()
+    next_token_type = str(current.get('tokenType') or 'fks').strip().lower()
+
+    if user_id is not None:
+        next_user_id = str(user_id or '').strip()
+    if token is not None:
+        next_token = str(token or '').strip()
+    if user_name is not None:
+        next_user_name = str(user_name or '').strip()
+    if token_type is not None:
+        next_token_type = str(token_type or '').strip().lower() or next_token_type
+
+    if next_token_type not in ('fks', 'cw'):
+        next_token_type = 'fks'
+    if not next_user_id:
+        raise ValueError('userId 不能为空')
+    if not next_token:
+        raise ValueError('Token 不能为空')
+
+    save_app_config_json(conn, GAME_CREDENTIALS_CONFIG_KEY, {
+        'userId': next_user_id,
+        'userName': next_user_name,
+        'token': next_token,
+        'tokenType': next_token_type,
+    })
+    return build_game_config_payload(
+        conn,
+        env_user_id=next_user_id,
+        env_token=next_token,
+        env_token_type=next_token_type,
+        env_user_name=next_user_name,
+    )
+
+
 def get_live_game_credentials(conn, env_user_id='', env_token='', env_token_type='fks', env_user_name=''):
     """获取当前生效的游戏凭证（DB 优先 → 环境变量）。每次调用都从 DB 读，热更新无需重启。"""
     stored, _ = load_app_config_json(conn, GAME_CREDENTIALS_CONFIG_KEY, default={})

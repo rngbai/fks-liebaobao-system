@@ -50,6 +50,7 @@ from db_mysql import (
     build_promotion_payload,
     build_recharge_state,
     get_live_game_credentials,
+    patch_game_config,
     save_game_config,
     list_community_profiles,
     create_community_profile,
@@ -1828,16 +1829,32 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             return
 
         if parsed.path == '/api/manage/token-config':
-            new_user_id = str(payload.get('userId') or payload.get('user_id') or '').strip()
-            new_user_name = str(payload.get('userName') or payload.get('user_name') or '').strip()
-            new_token = str(payload.get('token') or '').strip()
-            new_token_type = str(payload.get('tokenType') or payload.get('token_type') or 'fks').strip().lower()
+            has_user_id = ('userId' in payload) or ('user_id' in payload)
+            has_user_name = ('userName' in payload) or ('user_name' in payload)
+            has_token = 'token' in payload
+            has_token_type = ('tokenType' in payload) or ('token_type' in payload)
+            new_user_id = str(payload.get('userId') or payload.get('user_id') or '').strip() if has_user_id else None
+            new_user_name = str(payload.get('userName') or payload.get('user_name') or '').strip() if has_user_name else None
+            new_token = str(payload.get('token') or '').strip() if has_token else None
+            new_token_type = str(payload.get('tokenType') or payload.get('token_type') or '').strip().lower() if has_token_type else None
+            if not (has_user_id or has_user_name or has_token or has_token_type):
+                build_json(self, 200, {'ok': False, 'message': '请至少提交一个需要更新的字段'})
+                return
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = save_game_config(conn, new_user_id, new_token, token_type=new_token_type, user_name=new_user_name)
+                    data = patch_game_config(
+                        conn,
+                        user_id=new_user_id,
+                        token=new_token,
+                        token_type=new_token_type,
+                        user_name=new_user_name,
+                    )
                     conn.commit()
-                logger.info(f'[admin] 游戏凭证已更新 userId={new_user_id} userName={new_user_name or "-"} tokenType={new_token_type}')
-                build_json(self, 200, ok(data, '游戏凭证已更新，立即生效无需重启'))
+                logger.info(
+                    f"[admin] 游戏凭证已更新 userId={data.get('userId') or '-'} "
+                    f"userName={data.get('userName') or '-'} tokenType={data.get('tokenType') or '-'}"
+                )
+                build_json(self, 200, ok(data, '游戏凭证已更新（支持部分修改），立即生效无需重启'))
             except ValueError as exc:
                 build_json(self, 200, {'ok': False, 'message': str(exc)})
             except Exception as exc:

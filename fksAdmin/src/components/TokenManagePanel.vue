@@ -95,12 +95,21 @@ function closeForm() {
 }
 
 async function saveConfig() {
-  if (!form.userId.trim()) { ElMessage.warning('请输入游戏 userId'); return }
-  if (!form.userName.trim()) { ElMessage.warning('请输入用户名称 / 方块昵称'); return }
-  if (!form.token.trim()) { ElMessage.warning('请粘贴新的 Token'); return }
+  const nextUserId = form.userId.trim()
+  const nextUserName = form.userName.trim()
+  const nextToken = form.token.trim()
+  const payload = {}
+  if (nextUserId && nextUserId !== (config.userId || '')) payload.userId = nextUserId
+  if (nextUserName !== (config.userName || '')) payload.userName = nextUserName
+  if (nextToken) payload.token = nextToken
+  if (form.tokenType !== (config.tokenType || 'fks')) payload.tokenType = form.tokenType
+  if (!Object.keys(payload).length) {
+    ElMessage.warning('未检测到变更，请先修改至少一个字段')
+    return
+  }
   try {
     await ElMessageBox.confirm(
-      `确认更新游戏凭证？账号类型：${form.tokenType === 'cw' ? '潮玩宇宙' : '方块兽'}。更新后立即生效，无需重启服务器。`,
+      `确认更新游戏凭证？本次支持部分字段更新（userId / 用户名 / Token）。更新后立即生效，无需重启服务器。`,
       '更新游戏凭证',
       { type: 'warning', confirmButtonText: '确认更新', cancelButtonText: '取消' }
     )
@@ -108,12 +117,7 @@ async function saveConfig() {
 
   saving.value = true
   try {
-    const data = await api.post('/api/manage/token-config', {
-      userId: form.userId.trim(),
-      userName: form.userName.trim(),
-      token: form.token.trim(),
-      tokenType: form.tokenType,
-    })
+    const data = await api.post('/api/manage/token-config', payload)
     Object.assign(config, data)
     emit('count-change', config.isExpired ? 1 : 0)
     closeForm()
@@ -177,10 +181,14 @@ async function pollQrStatus() {
       emit('count-change', config.isExpired ? 1 : 0)
       if (data.userName) {
         ElMessage.success('潮玩宇宙扫码登录成功，凭证已自动保存！')
+        setTimeout(closeQr, 2000)
       } else {
-        ElMessage.warning('潮玩宇宙扫码登录成功，但请手动补充用户名称，确保小程序收款昵称一致。')
+        ElMessage.warning('潮玩宇宙扫码登录成功，请手动补充用户名称（无需再填 token）。')
+        setTimeout(() => {
+          closeQr()
+          openForm()
+        }, 1200)
       }
-      setTimeout(closeQr, 2000)
     } else if (data.status === 'timeout') {
       qrStatus.value = 'timeout'
     } else {
@@ -333,19 +341,19 @@ onUnmounted(stopQrPolling)
               {{ form.tokenType === 'cw' ? '验证时使用潮玩宇宙 User-Agent' : '验证时使用方块兽 User-Agent' }}
             </div>
           </el-form-item>
-          <el-form-item label="游戏 userId" required>
+          <el-form-item label="游戏 userId">
             <el-input v-model="form.userId" placeholder="如 9100503" clearable />
-            <div class="form-help">通常是固定数字，一般不需要修改</div>
+            <div class="form-help">支持单独修改；不改可保持原值</div>
           </el-form-item>
-          <el-form-item label="用户名称 / 方块昵称" required>
+          <el-form-item label="用户名称 / 方块昵称">
             <el-input v-model="form.userName" placeholder="如 面板小助手" clearable />
-            <div class="form-help">小程序“转入宝石”页会直接展示这里的名称，必须和实际收款账号保持一致</div>
+            <div class="form-help">扫码后可仅补这个字段；小程序转入页展示以这里为准</div>
           </el-form-item>
-          <el-form-item label="新的 Token" required>
+          <el-form-item label="新的 Token">
             <el-input
               v-model="form.token"
               :type="showFullToken ? 'text' : 'textarea'"
-              placeholder="粘贴完整 Token"
+              placeholder="留空表示不改 Token；填写则更新 Token"
               :autosize="{ minRows: 3, maxRows: 8 }"
               class="token-input"
             />
