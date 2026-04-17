@@ -4252,6 +4252,11 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             (FEEDBACK_STATUS_PENDING, FEEDBACK_SCENE_COMMUNITY_APPLY)
         )
         pending_feedback = cursor.fetchone() or {}
+        cursor.execute(
+            "SELECT COUNT(*) AS total_count FROM user_feedback WHERE status=%s AND COALESCE(scene, '') = %s",
+            (FEEDBACK_STATUS_PENDING, FEEDBACK_SCENE_COMMUNITY_APPLY)
+        )
+        pending_community_apply = cursor.fetchone() or {}
 
 
         cursor.execute(
@@ -4477,6 +4482,7 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
     pending_transfer_count = int(pending_transfer.get('total_count') or 0)
     pending_withdraw_count = int(pending_withdraw.get('total_count') or 0)
     pending_feedback_count = int(pending_feedback.get('total_count') or 0)
+    pending_community_apply_count = int(pending_community_apply.get('total_count') or 0)
 
     snapshot = {
         'rechargeCount': int(range_recharge.get('total_count') or 0),
