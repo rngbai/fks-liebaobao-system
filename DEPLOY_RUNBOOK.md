@@ -44,6 +44,31 @@ systemctl restart fks
 systemctl is-active fks
 ```
 
+如果本次包含 `fksAdmin` 改动（Vue 管理端），请使用下面流程替代上面的简化命令：
+
+```bash
+cd /root/fks_project
+git pull origin main
+cd fksAdmin && npm run build
+cd /root/fks_project
+systemctl restart fks
+systemctl is-active fks
+```
+
+### Step D: 发布后快速自检（避免“代码已更新但页面没变化”）
+
+```bash
+cd /root/fks_project
+git log -1 --oneline
+ls -lt /root/fks_project/fksapi/admin/dist/assets | head -n 5
+```
+
+检查要点：
+
+- `git log -1` 必须是预期提交（例如：`52fb3a2`）
+- `dist/assets` 的 `index-*.js` / `index-*.css` 时间应为本次发布时间
+- 若提交已更新但页面仍是旧样式，优先怀疑未执行 `npm run build`
+
 ## 3. 前端与后端分别发布注意事项
 
 ### 3.1 仅后端改动（Python）
@@ -79,6 +104,8 @@ curl -s http://127.0.0.1:5000/api/recharge/health
 - 可能没 build 前端
 - 可能 build 了但没同步到 `fksapi/admin/dist`
 - 浏览器强刷（Ctrl+F5）
+- 先执行 Step D 自检：确认提交号与 `dist/assets` 文件时间是否为最新
+- 如本次包含 `fksAdmin` 改动，务必执行：`cd /root/fks_project/fksAdmin && npm run build`
 
 ### 5.2 接口返回 401 / 未登录
 

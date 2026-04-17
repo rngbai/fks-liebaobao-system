@@ -738,6 +738,35 @@ def ensure_schema_upgrades(conn):
         upgrade_statements.append(
             "ALTER TABLE user_wallets ADD COLUMN commission_pending_x10 INT NOT NULL DEFAULT 0 COMMENT '待发放佣金×10'"
         )
+    # 兼容旧库：反馈表早期版本没有 scene/社区申请相关字段
+    if not column_exists(conn, 'user_feedback', 'scene'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN scene VARCHAR(32) NOT NULL DEFAULT '' AFTER contact"
+        )
+    if not column_exists(conn, 'user_feedback', 'target_category'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN target_category VARCHAR(32) NOT NULL DEFAULT '' AFTER scene"
+        )
+    if not column_exists(conn, 'user_feedback', 'target_category_label'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN target_category_label VARCHAR(64) NOT NULL DEFAULT '' AFTER target_category"
+        )
+    if not column_exists(conn, 'user_feedback', 'target_sub_tab'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN target_sub_tab VARCHAR(64) NOT NULL DEFAULT '' AFTER target_category_label"
+        )
+    if not column_exists(conn, 'user_feedback', 'linked_profile_id'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN linked_profile_id INT DEFAULT NULL AFTER target_sub_tab"
+        )
+    if not column_exists(conn, 'user_feedback', 'admin_reply'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN admin_reply VARCHAR(255) NOT NULL DEFAULT '' AFTER status"
+        )
+    if not column_exists(conn, 'user_feedback', 'handled_at'):
+        upgrade_statements.append(
+            "ALTER TABLE user_feedback ADD COLUMN handled_at DATETIME DEFAULT NULL AFTER admin_reply"
+        )
     with conn.cursor() as cursor:
         for statement in upgrade_statements:
             cursor.execute(statement)
@@ -1216,6 +1245,11 @@ def create_feedback(conn, user_row, feedback_type, title, content, contact='', s
     title = str(title or '').strip()[:120]
     content = str(content or '').strip()[:500]
     contact = str(contact or '').strip()[:64]
+    extra_context = extra_context or {}
+    target_category = str(extra_context.get('category') or '').strip()[:32]
+    target_category_label = str(extra_context.get('category_label') or '').strip()[:64]
+    target_sub_tab = str(extra_context.get('sub_tab') or '').strip()[:64]
+    content = append_feedback_context(content, scene=normalized_scene, extra_context=extra_context)
 
     if len(title) < 2:
         raise ValueError('请填写反馈标题')
@@ -1244,8 +1278,11 @@ def create_feedback(conn, user_row, feedback_type, title, content, contact='', s
 
         cursor.execute(
             '''
-            INSERT INTO user_feedback (user_id, feedback_type, title, content, contact, status)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO user_feedback (
+                user_id, feedback_type, title, content, contact,
+                scene, target_category, target_category_label, target_sub_tab, status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''',
             (
                 user_row['id'],
@@ -1253,6 +1290,10 @@ def create_feedback(conn, user_row, feedback_type, title, content, contact='', s
                 title,
                 content,
                 contact,
+                normalized_scene,
+                target_category,
+                target_category_label,
+                target_sub_tab,
                 FEEDBACK_STATUS_PENDING,
             )
         )

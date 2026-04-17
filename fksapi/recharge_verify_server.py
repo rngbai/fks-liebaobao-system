@@ -190,13 +190,33 @@ def _qr_poll_and_login(session_id: str, q_uuid: str):
                 login_params = {"uid": "", "version": _CW_VER}
                 cw_uid = cw_token = None
                 for path in ["/api/auth/wx", "/v9/api/auth/wx", "/v11/api/auth/wx"]:
-                    for data in [{"credential": code}, {"credential": code, "deviceName": "HONOR BVL-AN16"}]:
+                    # 兼容不同版本接口参数：有的版本收 credential，有的版本收 code
+                    for data in [
+                        {"credential": code},
+                        {"credential": code, "deviceName": "HONOR BVL-AN16"},
+                        {"code": code},
+                        {"code": code, "deviceName": "HONOR BVL-AN16"},
+                    ]:
                         try:
                             resp = _req.post(f"https://{_CW_LOGIN_DOMAIN}{path}",
                                              params=login_params, headers=login_hdrs, data=data, timeout=20)
                             j = resp.json() if resp.text else {}
-                            cw_token = j.get("token") or (j.get("data") or {}).get("token")
-                            cw_uid = j.get("userId") or (j.get("data") or {}).get("userId")
+                            j_data = j.get("data") if isinstance(j.get("data"), dict) else {}
+                            # 兼容多种返回字段命名（token/accessToken, userId/uid/user_id）
+                            cw_token = (
+                                j.get("token")
+                                or j.get("accessToken")
+                                or j_data.get("token")
+                                or j_data.get("accessToken")
+                            )
+                            cw_uid = (
+                                j.get("userId")
+                                or j.get("uid")
+                                or j.get("user_id")
+                                or j_data.get("userId")
+                                or j_data.get("uid")
+                                or j_data.get("user_id")
+                            )
                             if cw_token and cw_uid:
                                 break
                         except Exception:
