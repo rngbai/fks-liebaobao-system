@@ -3837,21 +3837,44 @@ def build_manage_guarantee_payload(conn, query='', status='all', page=1, page_si
 
 
 
-def build_manage_dashboard(conn, days=7, limit=20):
+def _parse_manage_dashboard_date(value, label):
+    text = str(value or '').strip()
+    if not text:
+        raise ValueError(f'{label}不能为空')
+    try:
+        return datetime.strptime(text, '%Y-%m-%d').date()
+    except ValueError as exc:
+        raise ValueError(f'{label}格式应为 YYYY-MM-DD') from exc
 
 
-    days = max(3, min(30, int(days)))
+
+def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=None):
     limit = max(0, min(100, int(limit)))
 
-    oldest_date = (datetime.now() - timedelta(days=days - 1)).date()
+    if start_date or end_date:
+        if not start_date or not end_date:
+            raise ValueError('开始日期和结束日期必须同时提供')
+        oldest_date = _parse_manage_dashboard_date(start_date, '开始日期')
+        latest_date = _parse_manage_dashboard_date(end_date, '结束日期')
+    else:
+        days = max(1, min(93, int(days)))
+        latest_date = datetime.now().date()
+        oldest_date = latest_date - timedelta(days=days - 1)
+
+    if oldest_date > latest_date:
+        raise ValueError('开始日期不能晚于结束日期')
+
+    days = (latest_date - oldest_date).days + 1
+    if days > 93:
+        raise ValueError('日期范围不能超过 93 天')
+
     oldest_text = oldest_date.strftime('%Y-%m-%d')
+    latest_text = latest_date.strftime('%Y-%m-%d')
 
     apply_guarantee_auto_confirm(conn)
     settle_confirmed_guarantee_orders(conn)
 
     with conn.cursor() as cursor:
-
-
         cursor.execute('SELECT COUNT(*) AS total FROM users')
         user_count = int((cursor.fetchone() or {}).get('total') or 0)
 
@@ -3887,9 +3910,7 @@ def build_manage_dashboard(conn, days=7, limit=20):
             """,
             (GUARANTEE_STATUS_DONE,)
         )
-
         guarantee_fee_summary = cursor.fetchone() or {}
-
 
         cursor.execute(
             """
@@ -3904,13 +3925,16 @@ def build_manage_dashboard(conn, days=7, limit=20):
 
         cursor.execute(
             """
-            SELECT COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount
+            SELECT COUNT(*) AS total_count,
+                   COALESCE(SUM(amount), 0) AS total_amount
             FROM recharge_orders
-            WHERE status='success' AND DATE(FROM_UNIXTIME(verified_at_ms / 1000)) = CURDATE()
-            """
+            WHERE status='success'
+              AND verified_at_ms > 0
+              AND DATE(FROM_UNIXTIME(verified_at_ms / 1000)) BETWEEN %s AND %s
+            """,
+            (oldest_text, latest_text)
         )
-
-        today_recharge = cursor.fetchone() or {}
+        range_recharge = cursor.fetchone() or {}
 
         cursor.execute(
             """
@@ -3918,33 +3942,37 @@ def build_manage_dashboard(conn, days=7, limit=20):
                    COALESCE(SUM(GREATEST(gem_amount - fee_amount, 0)), 0) AS total_amount,
                    COALESCE(SUM(fee_amount * 2), 0) AS total_fee_amount
             FROM guarantee_orders
-            WHERE status=%s AND DATE(finished_at) = CURDATE()
-
+            WHERE status=%s
+              AND finished_at IS NOT NULL
+              AND DATE(finished_at) BETWEEN %s AND %s
             """,
-            (GUARANTEE_STATUS_DONE,)
+            (GUARANTEE_STATUS_DONE, oldest_text, latest_text)
         )
-
-        today_guarantee_transfer = cursor.fetchone() or {}
+        range_guarantee_transfer = cursor.fetchone() or {}
 
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM(actual_amount), 0) AS total_amount
+                   COALESCE(SUM(actual_amount), 0) AS total_amount,
+                   COALESCE(SUM(fee_amount), 0) AS total_fee_amount
             FROM gem_transfer_requests
-            WHERE status=%s AND DATE(processed_at) = CURDATE()
+            WHERE status=%s
+              AND processed_at IS NOT NULL
+              AND DATE(processed_at) BETWEEN %s AND %s
             """,
-            (TRANSFER_REQUEST_STATUS_DONE,)
+            (TRANSFER_REQUEST_STATUS_DONE, oldest_text, latest_text)
         )
-        today_user_transfer = cursor.fetchone() or {}
+        range_user_transfer = cursor.fetchone() or {}
 
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count
             FROM user_feedback
-            WHERE DATE(created_at)=CURDATE()
-            """
+            WHERE DATE(created_at) BETWEEN %s AND %s
+            """,
+            (oldest_text, latest_text)
         )
-        today_feedback = cursor.fetchone() or {}
+        range_feedback = cursor.fetchone() or {}
 
         cursor.execute(
             "SELECT COUNT(*) AS total_count FROM guarantee_orders WHERE status=%s AND seller_confirmed_at IS NOT NULL",
@@ -4062,17 +4090,18 @@ def build_manage_dashboard(conn, days=7, limit=20):
             guarantee_rows = []
             feedback_rows = []
 
-
         cursor.execute(
             '''
             SELECT DATE(FROM_UNIXTIME(verified_at_ms / 1000)) AS stat_date,
                    COUNT(*) AS recharge_count,
                    COALESCE(SUM(amount), 0) AS recharge_amount
             FROM recharge_orders
-            WHERE status='success' AND verified_at_ms > 0 AND DATE(FROM_UNIXTIME(verified_at_ms / 1000)) >= %s
+            WHERE status='success'
+              AND verified_at_ms > 0
+              AND DATE(FROM_UNIXTIME(verified_at_ms / 1000)) BETWEEN %s AND %s
             GROUP BY DATE(FROM_UNIXTIME(verified_at_ms / 1000))
             ''',
-            (oldest_text,)
+            (oldest_text, latest_text)
         )
         recharge_daily_rows = cursor.fetchall() or []
 
@@ -4081,10 +4110,10 @@ def build_manage_dashboard(conn, days=7, limit=20):
             SELECT DATE(created_at) AS stat_date,
                    COUNT(*) AS created_count
             FROM guarantee_orders
-            WHERE DATE(created_at) >= %s
+            WHERE DATE(created_at) BETWEEN %s AND %s
             GROUP BY DATE(created_at)
             ''',
-            (oldest_text,)
+            (oldest_text, latest_text)
         )
         guarantee_created_rows = cursor.fetchall() or []
 
@@ -4093,10 +4122,10 @@ def build_manage_dashboard(conn, days=7, limit=20):
             SELECT DATE(created_at) AS stat_date,
                    COUNT(*) AS feedback_count
             FROM user_feedback
-            WHERE DATE(created_at) >= %s
+            WHERE DATE(created_at) BETWEEN %s AND %s
             GROUP BY DATE(created_at)
             ''',
-            (oldest_text,)
+            (oldest_text, latest_text)
         )
         feedback_created_rows = cursor.fetchall() or []
 
@@ -4107,12 +4136,13 @@ def build_manage_dashboard(conn, days=7, limit=20):
                    COALESCE(SUM(GREATEST(gem_amount - fee_amount, 0)), 0) AS transfer_amount,
                    COALESCE(SUM(fee_amount * 2), 0) AS fee_amount
             FROM guarantee_orders
-            WHERE status=%s AND finished_at IS NOT NULL AND DATE(finished_at) >= %s
+            WHERE status=%s
+              AND finished_at IS NOT NULL
+              AND DATE(finished_at) BETWEEN %s AND %s
             GROUP BY DATE(finished_at)
             ''',
-            (GUARANTEE_STATUS_DONE, oldest_text)
+            (GUARANTEE_STATUS_DONE, oldest_text, latest_text)
         )
-
         guarantee_done_rows = cursor.fetchall() or []
 
         cursor.execute(
@@ -4122,13 +4152,14 @@ def build_manage_dashboard(conn, days=7, limit=20):
                    COALESCE(SUM(actual_amount), 0) AS transfer_amount,
                    COALESCE(SUM(fee_amount), 0) AS fee_amount
             FROM gem_transfer_requests
-            WHERE status=%s AND processed_at IS NOT NULL AND DATE(processed_at) >= %s
+            WHERE status=%s
+              AND processed_at IS NOT NULL
+              AND DATE(processed_at) BETWEEN %s AND %s
             GROUP BY DATE(processed_at)
             ''',
-            (TRANSFER_REQUEST_STATUS_DONE, oldest_text)
+            (TRANSFER_REQUEST_STATUS_DONE, oldest_text, latest_text)
         )
         transfer_request_done_rows = cursor.fetchall() or []
-
 
     daily_map = {}
     for offset in range(days):
@@ -4146,7 +4177,6 @@ def build_manage_dashboard(conn, days=7, limit=20):
             'withdrawFeeAmount': 0,
             'platformFeeAmount': 0,
         }
-
 
     for row in recharge_daily_rows:
         key = str(row.get('stat_date'))
@@ -4180,13 +4210,27 @@ def build_manage_dashboard(conn, days=7, limit=20):
             daily_map[key]['withdrawFeeAmount'] += int(row.get('fee_amount') or 0)
             daily_map[key]['platformFeeAmount'] += int(row.get('fee_amount') or 0)
 
-
     pending_transfer_count = int(pending_transfer.get('total_count') or 0)
     pending_withdraw_count = int(pending_withdraw.get('total_count') or 0)
     pending_feedback_count = int(pending_feedback.get('total_count') or 0)
 
+    snapshot = {
+        'rechargeCount': int(range_recharge.get('total_count') or 0),
+        'rechargeAmount': int(range_recharge.get('total_amount') or 0),
+        'transferCount': int(range_guarantee_transfer.get('total_count') or 0) + int(range_user_transfer.get('total_count') or 0),
+        'transferAmount': int(range_guarantee_transfer.get('total_amount') or 0) + int(range_user_transfer.get('total_amount') or 0),
+        'guaranteeFeeAmount': int(range_guarantee_transfer.get('total_fee_amount') or 0),
+        'withdrawFeeAmount': int(range_user_transfer.get('total_fee_amount') or 0),
+        'platformFeeAmount': int(range_guarantee_transfer.get('total_fee_amount') or 0) + int(range_user_transfer.get('total_fee_amount') or 0),
+        'feedbackCount': int(range_feedback.get('total_count') or 0),
+    }
 
     return {
+        'range': {
+            'startDate': oldest_text,
+            'endDate': latest_text,
+            'dayCount': days,
+        },
         'totals': {
             'userCount': user_count,
             'walletBalance': int(wallet_summary.get('total_balance') or 0),
@@ -4209,18 +4253,8 @@ def build_manage_dashboard(conn, days=7, limit=20):
             'platformAccountBalance': max(0, int(plat_recharge.get('total_recharged') or 0) - int(plat_transfer.get('total_transferred') or 0)),
             'allUsersWalletBalance': int(wallet_summary.get('total_balance') or 0),
         },
-
-        'today': {
-            'rechargeCount': int(today_recharge.get('total_count') or 0),
-            'rechargeAmount': int(today_recharge.get('total_amount') or 0),
-            'transferCount': int(today_guarantee_transfer.get('total_count') or 0) + int(today_user_transfer.get('total_count') or 0),
-            'transferAmount': int(today_guarantee_transfer.get('total_amount') or 0) + int(today_user_transfer.get('total_amount') or 0),
-            'guaranteeFeeAmount': int(today_guarantee_transfer.get('total_fee_amount') or 0),
-            'withdrawFeeAmount': int(today_user_transfer.get('total_fee_amount') or 0),
-            'platformFeeAmount': int(today_guarantee_transfer.get('total_fee_amount') or 0) + int(today_user_transfer.get('total_fee_amount') or 0),
-            'feedbackCount': int(today_feedback.get('total_count') or 0),
-        },
-
+        'snapshot': snapshot,
+        'today': snapshot,
         'dailyFlow': list(daily_map.values()),
         'rechargeList': [serialize_manage_recharge_row(row) for row in recharge_rows],
         'pendingTransferList': [serialize_guarantee_row(row) for row in pending_transfer_rows],
@@ -4229,6 +4263,7 @@ def build_manage_dashboard(conn, days=7, limit=20):
         'guaranteeList': [serialize_guarantee_row(row) for row in guarantee_rows],
         'feedbackList': [serialize_manage_feedback_row(row) for row in feedback_rows],
     }
+
 
 
 # ──────────────────────────────────────────────

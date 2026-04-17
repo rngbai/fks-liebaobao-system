@@ -104,10 +104,35 @@ const MANAGE_LIST_CONFIG = {
     defaultPageSize: 10,
   },
 }
+const SNAPSHOT_PRESET_OPTIONS = [
+  { label: '日', value: 'day' },
+  { label: '周', value: 'week' },
+  { label: '月', value: 'month' },
+  { label: '自定义', value: 'custom' },
+]
+
+
+function createEmptySnapshot() {
+  return {
+    rechargeCount: 0,
+    rechargeAmount: 0,
+    transferCount: 0,
+    transferAmount: 0,
+    guaranteeFeeAmount: 0,
+    withdrawFeeAmount: 0,
+    platformFeeAmount: 0,
+    feedbackCount: 0,
+  }
+}
 
 
 function createEmptyDashboard() {
   return {
+    range: {
+      startDate: '',
+      endDate: '',
+      dayCount: 1,
+    },
     totals: {
       userCount: 0,
       walletBalance: 0,
@@ -130,17 +155,8 @@ function createEmptyDashboard() {
       platformAccountBalance: 0,
       allUsersWalletBalance: 0,
     },
-    today: {
-      rechargeCount: 0,
-      rechargeAmount: 0,
-      transferCount: 0,
-      transferAmount: 0,
-      guaranteeFeeAmount: 0,
-      withdrawFeeAmount: 0,
-      platformFeeAmount: 0,
-      feedbackCount: 0,
-    },
-
+    snapshot: createEmptySnapshot(),
+    today: createEmptySnapshot(),
     dailyFlow: [],
     rechargeList: [],
     pendingTransferList: [],
@@ -150,6 +166,7 @@ function createEmptyDashboard() {
     feedbackList: [],
   }
 }
+
 
 function createPagerState(pageSize = 10) {
   return {
@@ -296,7 +313,81 @@ function buildPaginationMeta(rows = [], state = {}) {
   }
 }
 
+function padDatePart(value) {
+  return String(value).padStart(2, '0')
+}
+
+function formatLocalDate(date = new Date()) {
+  const current = date instanceof Date ? date : new Date(date)
+  return `${current.getFullYear()}-${padDatePart(current.getMonth() + 1)}-${padDatePart(current.getDate())}`
+}
+
+function getTodayRange() {
+  const today = formatLocalDate()
+  return [today, today]
+}
+
+function getCurrentWeekRange() {
+  const now = new Date()
+  const current = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const day = current.getDay() || 7
+  current.setDate(current.getDate() - day + 1)
+  return [formatLocalDate(current), formatLocalDate(now)]
+}
+
+function getCurrentMonthRange() {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  return [formatLocalDate(start), formatLocalDate(now)]
+}
+
+function getSnapshotRangeByMode(mode = 'day', customRange = []) {
+  if (mode === 'week') {
+    const [startDate, endDate] = getCurrentWeekRange()
+    return {
+      startDate,
+      endDate,
+      dayCount: Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1),
+    }
+  }
+  if (mode === 'month') {
+    const [startDate, endDate] = getCurrentMonthRange()
+    return {
+      startDate,
+      endDate,
+      dayCount: Math.max(1, Math.round((new Date(endDate).getTime() - new Date(startDate).getTime()) / 86400000) + 1),
+    }
+  }
+  if (mode === 'custom' && Array.isArray(customRange) && customRange.length === 2 && customRange[0] && customRange[1]) {
+    return {
+      startDate: customRange[0],
+      endDate: customRange[1],
+      dayCount: Math.max(1, Math.round((new Date(customRange[1]).getTime() - new Date(customRange[0]).getTime()) / 86400000) + 1),
+    }
+  }
+  const [startDate, endDate] = getTodayRange()
+  return {
+    startDate,
+    endDate,
+    dayCount: 1,
+  }
+}
+
+function formatSnapshotRangeText(startDate = '', endDate = '') {
+  if (!startDate && !endDate) return '未选择日期范围'
+  if (startDate && endDate && startDate === endDate) return startDate
+  return `${startDate || '未设开始'} 至 ${endDate || '未设结束'}`
+}
+
+function getSnapshotLabelPrefix(mode = 'day') {
+  if (mode === 'week') return '本周'
+  if (mode === 'month') return '本月'
+  if (mode === 'custom') return '所选区间'
+  return '今日'
+}
+
 function buildRechargeDetail(item = {}) {
+
   return {
     eyebrow: 'RECHARGE DETAIL',
     title: `${pickText(item.userNickName, '方块兽玩家')} · 充值记录`,
@@ -455,7 +546,12 @@ const activeModule = ref('overview')
 const drawerVisible = ref(false)
 const drawerDetail = ref(createDrawerDetail())
 const lastLoadedAt = ref(0)
+const snapshotFilter = reactive({
+  mode: 'day',
+  customRange: getTodayRange(),
+})
 const userPanelRef = ref(null)
+
 const promotionPanelRef = ref(null)
 const homeContentPanelRef = ref(null)
 const tokenPanelRef = ref(null)
@@ -602,25 +698,42 @@ const summaryCards = computed(() => [
     highlight: true,
   },
 ])
-const todayCards = computed(() => [
+const resolvedSnapshotRange = computed(() => getSnapshotRangeByMode(snapshotFilter.mode, snapshotFilter.customRange))
+const dashboardRange = computed(() => {
+  const range = dashboard.value.range || {}
+  return {
+    startDate: range.startDate || resolvedSnapshotRange.value.startDate,
+    endDate: range.endDate || resolvedSnapshotRange.value.endDate,
+    dayCount: Number(range.dayCount || resolvedSnapshotRange.value.dayCount || 1),
+  }
+})
+const snapshotRangeText = computed(() => formatSnapshotRangeText(dashboardRange.value.startDate, dashboardRange.value.endDate))
+const snapshotLabelPrefix = computed(() => getSnapshotLabelPrefix(snapshotFilter.mode))
+const snapshotTitle = computed(() => `${snapshotLabelPrefix.value}经营快照`)
+const snapshotTagText = computed(() => (dashboardRange.value.dayCount <= 1 ? '当日汇总' : `${dashboardRange.value.dayCount} 天汇总`))
+const snapshotData = computed(() => ({
+  ...createEmptySnapshot(),
+  ...(dashboard.value.snapshot || dashboard.value.today || {}),
+}))
+const snapshotCards = computed(() => [
   {
-    label: '今日充值',
-    value: formatNumber(dashboard.value.today.rechargeAmount),
-    helper: `${formatNumber(dashboard.value.today.rechargeCount)} 笔到账`,
+    label: `${snapshotLabelPrefix.value}充值`,
+    value: formatNumber(snapshotData.value.rechargeAmount),
+    helper: `${formatNumber(snapshotData.value.rechargeCount)} 笔到账`,
   },
   {
-    label: '今日手续费',
-    value: formatNumber(dashboard.value.today.platformFeeAmount),
-    helper: `担保 ${formatNumber(dashboard.value.today.guaranteeFeeAmount)} / 转出 ${formatNumber(dashboard.value.today.withdrawFeeAmount)}`,
+    label: `${snapshotLabelPrefix.value}手续费`,
+    value: formatNumber(snapshotData.value.platformFeeAmount),
+    helper: `担保 ${formatNumber(snapshotData.value.guaranteeFeeAmount)} / 转出 ${formatNumber(snapshotData.value.withdrawFeeAmount)}`,
   },
   {
-    label: '今日转出',
-    value: formatNumber(dashboard.value.today.transferAmount),
-    helper: `${formatNumber(dashboard.value.today.transferCount)} 笔处理`,
+    label: `${snapshotLabelPrefix.value}转出`,
+    value: formatNumber(snapshotData.value.transferAmount),
+    helper: `${formatNumber(snapshotData.value.transferCount)} 笔处理`,
   },
   {
-    label: '今日反馈',
-    value: formatNumber(dashboard.value.today.feedbackCount),
+    label: `${snapshotLabelPrefix.value}反馈`,
+    value: formatNumber(snapshotData.value.feedbackCount),
     helper: `待处理 ${formatNumber(dashboard.value.totals.pendingFeedbackCount)} 条`,
   },
   {
@@ -629,9 +742,12 @@ const todayCards = computed(() => [
     helper: `担保 ${formatNumber(dashboard.value.totals.pendingTransferCount)} / 用户 ${formatNumber(dashboard.value.totals.pendingWithdrawCount)} / 反馈 ${formatNumber(dashboard.value.totals.pendingFeedbackCount)}`,
   },
 ])
+const overviewTrendTitle = computed(() => (dashboardRange.value.dayCount <= 1 ? '当日走势' : `${dashboardRange.value.dayCount} 天走势`))
+const overviewTrendEmptyText = computed(() => `暂无${overviewTrendTitle.value}数据`)
 
 
 const overviewTrendRows = computed(() => dashboard.value.dailyFlow.slice().reverse())
+
 const filteredDailyRows = computed(() =>
   filterRows(overviewTrendRows.value, listFilters.daily, (item = {}) => [
     item.date,
@@ -830,14 +946,38 @@ function handleInspect(type, item) {
   if (type === 'pending-feedback') return openDrawer(buildFeedbackDetail(item, { fromQueue: true }))
 }
 
+function buildDashboardRequestUrl(limit = 0) {
+  const range = resolvedSnapshotRange.value
+  const params = new URLSearchParams({
+    limit: String(Math.max(0, Number(limit || 0))),
+    start_date: range.startDate,
+    end_date: range.endDate,
+    days: String(range.dayCount || 1),
+  })
+  return `/api/manage/dashboard?${params.toString()}`
+}
+
+async function handleSnapshotPresetChange(mode) {
+  if (!mode) return
+  snapshotFilter.mode = mode
+  if (mode === 'custom' && (!Array.isArray(snapshotFilter.customRange) || snapshotFilter.customRange.length !== 2)) {
+    snapshotFilter.customRange = getTodayRange()
+  }
+  await loadDashboard({ silent: true })
+}
+
+async function handleSnapshotCustomRangeChange(range) {
+  if (!Array.isArray(range) || range.length !== 2 || !range[0] || !range[1]) return
+  snapshotFilter.mode = 'custom'
+  await loadDashboard({ silent: true })
+}
+
 async function loadDashboard({ silent = false } = {}) {
   refreshing.value = true
   if (!silent) loading.value = true
 
   try {
-    const data = await api.get('/api/manage/dashboard?days=7&limit=0')
-
-
+    const data = await api.get(buildDashboardRequestUrl(0))
     dashboard.value = {
       ...createEmptyDashboard(),
       ...data,
@@ -851,6 +991,7 @@ async function loadDashboard({ silent = false } = {}) {
     refreshing.value = false
   }
 }
+
 
 async function handleMenuSelect(index) {
   activeModule.value = index
@@ -1050,13 +1191,14 @@ async function handleFeedbackSubmit({ item, status }) {
     })
     closeDrawer()
     ElMessage.success(`反馈已标记为${actionTextMap[status]}`)
-    await loadDashboard({ silent: true })
+    await reloadDashboardWithCurrentModule({ silent: true })
   } catch (error) {
     ElMessage.error(error.message || '更新反馈状态失败')
   } finally {
     actionBusy.feedback = ''
   }
 }
+
 
 async function handleSettleMonth() {
   let promptResult
@@ -1201,15 +1343,43 @@ onMounted(async () => {
 
           <el-row :gutter="16" class="block-space">
             <el-col :xs="24" :lg="10">
-              <el-card class="panel-card" shadow="never">
+              <el-card class="panel-card snapshot-panel" shadow="never">
                 <template #header>
-                  <div class="panel-head">
-                    <span>今日经营快照</span>
-                    <el-tag type="primary" effect="plain">实时汇总</el-tag>
+                  <div class="panel-head panel-head--stack">
+                    <div class="panel-head-copy">
+                      <span>{{ snapshotTitle }}</span>
+                      <div class="panel-subhead">{{ snapshotRangeText }}</div>
+                    </div>
+                    <div class="snapshot-toolbar">
+                      <div class="snapshot-segment" role="tablist" aria-label="经营快照筛选">
+                        <button
+                          v-for="option in SNAPSHOT_PRESET_OPTIONS"
+                          :key="option.value"
+                          type="button"
+                          :class="['snapshot-chip', snapshotFilter.mode === option.value ? 'is-active' : '']"
+                          @click="handleSnapshotPresetChange(option.value)"
+                        >
+                          {{ option.label }}
+                        </button>
+                      </div>
+                      <el-date-picker
+                        v-if="snapshotFilter.mode === 'custom'"
+                        v-model="snapshotFilter.customRange"
+                        type="daterange"
+                        unlink-panels
+                        range-separator="至"
+                        start-placeholder="开始日期"
+                        end-placeholder="结束日期"
+                        value-format="YYYY-MM-DD"
+                        class="snapshot-date-picker"
+                        @change="handleSnapshotCustomRangeChange"
+                      />
+                      <el-tag type="primary" effect="plain">{{ snapshotTagText }}</el-tag>
+                    </div>
                   </div>
                 </template>
                 <div class="today-grid">
-                  <div v-for="item in todayCards" :key="item.label" class="today-item">
+                  <div v-for="item in snapshotCards" :key="item.label" class="today-item">
                     <div class="today-label">{{ item.label }}</div>
                     <div class="today-value">{{ item.value }}</div>
                     <div class="today-helper">{{ item.helper }}</div>
@@ -1221,11 +1391,12 @@ onMounted(async () => {
               <el-card class="panel-card" shadow="never">
                 <template #header>
                   <div class="panel-head">
-                    <span>近 7 天走势</span>
-                    <el-tag effect="plain">运营趋势</el-tag>
+                    <span>{{ overviewTrendTitle }}</span>
+                    <el-tag effect="plain">{{ snapshotRangeText }}</el-tag>
                   </div>
                 </template>
-                <el-table :data="overviewTrendRows" border stripe size="small" empty-text="暂无近 7 天走势数据">
+                <el-table :data="overviewTrendRows" border stripe size="small" :empty-text="overviewTrendEmptyText">
+
                   <el-table-column prop="date" label="日期" min-width="120" />
                   <el-table-column label="充值" min-width="160">
                     <template #default="{ row }">{{ formatNumber(row.rechargeAmount || 0) }} / {{ formatNumber(row.rechargeCount || 0) }} 笔</template>
@@ -1751,7 +1922,7 @@ onMounted(async () => {
           <el-card class="panel-card" shadow="never">
             <template #header>
               <div class="panel-head panel-head--between">
-                <span>近 7 天走势</span>
+                <span>{{ overviewTrendTitle }}</span>
                 <el-tag effect="plain">共 {{ filteredDailyRows.length }} / {{ dashboard.dailyFlow.length }} 天数据</el-tag>
               </div>
             </template>
@@ -1765,7 +1936,8 @@ onMounted(async () => {
 
               <el-button v-if="hasActiveFilters('daily')" @click="resetListFilters('daily')">清空筛选</el-button>
             </div>
-            <el-table v-loading="loading" :data="filteredDailyRows" border stripe empty-text="暂无近 7 天走势数据">
+            <el-table v-loading="loading" :data="filteredDailyRows" border stripe :empty-text="overviewTrendEmptyText">
+
               <el-table-column prop="date" label="日期" min-width="120" />
               <el-table-column label="充值金额" min-width="140">
                 <template #default="{ row }">{{ formatNumber(row.rechargeAmount || 0) }}</template>
@@ -2108,6 +2280,69 @@ onMounted(async () => {
   justify-content: space-between;
 }
 
+.panel-head--stack {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.panel-head-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel-subhead {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8c97ab;
+}
+
+.snapshot-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.snapshot-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f4f7ff 0%, #eef3fb 100%);
+  border: 1px solid #dbe5f2;
+}
+
+.snapshot-chip {
+  border: none;
+  background: transparent;
+  color: #5f6b7c;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 9px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.snapshot-chip:hover {
+  color: #1f2a37;
+  background: rgba(64, 158, 255, 0.08);
+}
+
+.snapshot-chip.is-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #409eff 0%, #5b8cff 100%);
+  box-shadow: 0 10px 24px rgba(64, 158, 255, 0.24);
+}
+
+.snapshot-date-picker {
+  width: 270px;
+}
+
 .today-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2116,10 +2351,12 @@ onMounted(async () => {
 
 .today-item {
   padding: 16px;
-  border-radius: 10px;
-  background: #f8fafc;
-  border: 1px solid #ebeef5;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #fbfdff 0%, #f3f7fc 100%);
+  border: 1px solid #e6edf7;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
+
 
 .toolbar-row {
   display: flex;
@@ -2247,5 +2484,25 @@ onMounted(async () => {
   .drawer-highlight-grid {
     grid-template-columns: 1fr;
   }
+
+  .panel-head--stack,
+  .snapshot-toolbar {
+    width: 100%;
+  }
+
+  .snapshot-toolbar {
+    justify-content: flex-start;
+  }
+
+  .snapshot-segment {
+    flex-wrap: wrap;
+  }
+
+  .snapshot-date-picker,
+  .toolbar-input,
+  .toolbar-select {
+    width: 100%;
+  }
 }
+
 </style>

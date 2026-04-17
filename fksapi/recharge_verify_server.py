@@ -21,8 +21,10 @@ if _env_file.exists():
             _k, _v = _line.split('=', 1)
             os.environ.setdefault(_k.strip(), _v.strip())
 
+from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
+
 
 
 
@@ -315,6 +317,14 @@ try:
 except (TypeError, ValueError):
     ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1000
 ADMIN_SESSIONS = {}
+ADMIN_SESSION_LOCK = threading.Lock()
+try:
+    DASHBOARD_CACHE_TTL_SECONDS = max(0, int(os.environ.get('FKS_DASHBOARD_CACHE_TTL_SECONDS', '8')))
+except (TypeError, ValueError):
+    DASHBOARD_CACHE_TTL_SECONDS = 8
+_DASHBOARD_CACHE = {}
+_DASHBOARD_CACHE_LOCK = threading.Lock()
+
 
 
 
@@ -461,20 +471,144 @@ def save_base64_image(image_base64, image_name='', folder='guarantee-proof'):
     return f'/uploads/{folder_name}/{file_name}'
 
 
+def get_request_scheme(handler):
+    forwarded_proto = str(handler.headers.get('X-Forwarded-Proto') or '').strip().split(',')[0].strip().lower()
+    if forwarded_proto in ('http', 'https'):
+        return forwarded_proto
+
+    forwarded = str(handler.headers.get('Forwarded') or '').strip()
+    if forwarded:
+        match = re.search(r'proto=([^;\s,]+)', forwarded, re.IGNORECASE)
+        if match:
+            proto = match.group(1).strip().lower()
+            if proto in ('http', 'https'):
+                return proto
+
+    if str(handler.headers.get('X-Forwarded-Ssl') or '').strip().lower() == 'on':
+        return 'https'
+    if str(handler.headers.get('Front-End-Https') or '').strip().lower() == 'on':
+        return 'https'
+    return 'http'
+
+
+
 def build_public_file_url(handler, relative_url):
     host = str(handler.headers.get('Host') or f'127.0.0.1:{PORT}').strip()
-    return f'http://{host}{relative_url}'
+    scheme = get_request_scheme(handler)
+    return f'{scheme}://{host}{relative_url}'
+
+
+
+def get_dashboard_cache_key(start_date_text, end_date_text, limit):
+    return f'{start_date_text}:{end_date_text}:{int(limit)}'
+
+
+
+def get_cached_dashboard_payload(start_date_text, end_date_text, limit):
+    if DASHBOARD_CACHE_TTL_SECONDS <= 0:
+        return None
+    cache_key = get_dashboard_cache_key(start_date_text, end_date_text, limit)
+    now_ts = time.time()
+    with _DASHBOARD_CACHE_LOCK:
+        cached = _DASHBOARD_CACHE.get(cache_key)
+        if not cached:
+            return None
+        if cached.get('expires_at', 0) <= now_ts:
+            _DASHBOARD_CACHE.pop(cache_key, None)
+            return None
+        return cached.get('payload')
+
+
+
+def set_cached_dashboard_payload(start_date_text, end_date_text, limit, payload):
+    if DASHBOARD_CACHE_TTL_SECONDS <= 0:
+        return
+    cache_key = get_dashboard_cache_key(start_date_text, end_date_text, limit)
+    with _DASHBOARD_CACHE_LOCK:
+        _DASHBOARD_CACHE[cache_key] = {
+            'payload': payload,
+            'expires_at': time.time() + DASHBOARD_CACHE_TTL_SECONDS,
+        }
+
+
+
+def clear_dashboard_cache():
+    with _DASHBOARD_CACHE_LOCK:
+        _DASHBOARD_CACHE.clear()
+
+
+
+def parse_dashboard_date_text(date_text, field_label):
+    text = str(date_text or '').strip()
+    if not text:
+        raise ValueError(f'{field_label}不能为空')
+    try:
+        return datetime.strptime(text, '%Y-%m-%d').date(), text
+    except ValueError as exc:
+        raise ValueError(f'{field_label}格式应为 YYYY-MM-DD') from exc
+
+
+
+def resolve_dashboard_date_range(params):
+    start_text = str(params.get('start_date', [''])[0] or '').strip()
+    end_text = str(params.get('end_date', [''])[0] or '').strip()
+
+    if start_text or end_text:
+        start_date, start_text = parse_dashboard_date_text(start_text, '开始日期')
+        end_date, end_text = parse_dashboard_date_text(end_text, '结束日期')
+    else:
+        days = max(1, min(93, to_int(params.get('days', ['7'])[0], 7) or 7))
+        end_date = datetime.now().date()
+        start_date = end_date - timedelta(days=days - 1)
+        start_text = start_date.strftime('%Y-%m-%d')
+        end_text = end_date.strftime('%Y-%m-%d')
+
+    if start_date > end_date:
+        raise ValueError('开始日期不能晚于结束日期')
+
+    day_count = (end_date - start_date).days + 1
+    if day_count > 93:
+        raise ValueError('日期范围不能超过 93 天')
+
+    return {
+        'start_date': start_date,
+        'end_date': end_date,
+        'start_text': start_text,
+        'end_text': end_text,
+        'day_count': day_count,
+    }
+
+
 
 
 def cleanup_admin_sessions():
     current_ms = now_ms()
-    expired_tokens = [
-        session_token
-        for session_token, session in ADMIN_SESSIONS.items()
-        if current_ms >= int((session or {}).get('expiresAt') or 0)
-    ]
-    for session_token in expired_tokens:
-        ADMIN_SESSIONS.pop(session_token, None)
+    with ADMIN_SESSION_LOCK:
+        expired_tokens = [
+            session_token
+            for session_token, session in ADMIN_SESSIONS.items()
+            if current_ms >= int((session or {}).get('expiresAt') or 0)
+        ]
+        for session_token in expired_tokens:
+            ADMIN_SESSIONS.pop(session_token, None)
+
+
+
+def get_admin_session_record(session_token):
+    if not session_token:
+        return None
+    with ADMIN_SESSION_LOCK:
+        session = ADMIN_SESSIONS.get(session_token)
+        if not session:
+            return None
+        expires_at = int(session.get('expiresAt') or 0)
+        if expires_at and expires_at <= now_ms():
+            ADMIN_SESSIONS.pop(session_token, None)
+            return None
+        return {
+            'username': session.get('username') or ADMIN_USERNAME,
+            'expiresAt': expires_at,
+        }
 
 
 
@@ -482,10 +616,11 @@ def create_admin_session(username):
     cleanup_admin_sessions()
     session_token = secrets.token_urlsafe(32)
     expires_at = now_ms() + ADMIN_SESSION_TTL_MS
-    ADMIN_SESSIONS[session_token] = {
-        'username': username,
-        'expiresAt': expires_at,
-    }
+    with ADMIN_SESSION_LOCK:
+        ADMIN_SESSIONS[session_token] = {
+            'username': username,
+            'expiresAt': expires_at,
+        }
     return {
         'token': session_token,
         'username': username,
@@ -496,7 +631,9 @@ def create_admin_session(username):
 
 def revoke_admin_session(session_token):
     if session_token:
-        ADMIN_SESSIONS.pop(session_token, None)
+        with ADMIN_SESSION_LOCK:
+            ADMIN_SESSIONS.pop(session_token, None)
+
 
 
 
@@ -551,20 +688,15 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
     def get_admin_session(self):
         cleanup_admin_sessions()
         session_token = self.get_admin_token()
-        if not session_token:
-            return None
-        session = ADMIN_SESSIONS.get(session_token)
+        session = get_admin_session_record(session_token)
         if not session:
-            return None
-        expires_at = int(session.get('expiresAt') or 0)
-        if expires_at and expires_at <= now_ms():
-            ADMIN_SESSIONS.pop(session_token, None)
             return None
         return {
             'token': session_token,
             'username': session.get('username') or ADMIN_USERNAME,
-            'expiresAt': expires_at,
+            'expiresAt': int(session.get('expiresAt') or 0),
         }
+
 
     def is_admin_authed(self):
         return self.get_admin_session() is not None
@@ -1137,25 +1269,53 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
             if not self.ensure_admin():
                 return
-            days = max(3, to_int(params.get('days', ['7'])[0], 7))
             limit = max(0, to_int(params.get('limit', ['20'])[0], 20))
 
             try:
+                dashboard_range = resolve_dashboard_date_range(params)
+                cached_payload = get_cached_dashboard_payload(
+                    dashboard_range['start_text'],
+                    dashboard_range['end_text'],
+                    limit,
+                )
+                if cached_payload is not None:
+                    build_json(self, 200, ok(cached_payload, '查询成功'))
+                    return
+
                 with get_connection(autocommit=False) as conn:
-                    data = build_manage_dashboard(conn, days=days, limit=limit)
+                    data = build_manage_dashboard(
+                        conn,
+                        days=dashboard_range['day_count'],
+                        limit=limit,
+                        start_date=dashboard_range['start_text'],
+                        end_date=dashboard_range['end_text'],
+                    )
                     conn.commit()
+                set_cached_dashboard_payload(
+                    dashboard_range['start_text'],
+                    dashboard_range['end_text'],
+                    limit,
+                    data,
+                )
                 build_json(self, 200, ok(data, '查询成功'))
+            except ValueError as exc:
+                build_json(self, 400, {'ok': False, 'message': str(exc)})
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取管理台数据失败: {exc}'})
             return
+
+
 
 
         build_json(self, 404, {'ok': False, 'message': '接口不存在'})
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        if parsed.path != '/api/manage/login':
+            clear_dashboard_cache()
         try:
             payload = self.read_json_body()
+
         except Exception as exc:
             build_json(self, 400, {'ok': False, 'message': f'请求体不是合法 JSON: {exc}'})
             return
@@ -1261,46 +1421,16 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             image_name = str(payload.get('image_name') or payload.get('imageName') or '').strip()
             folder = str(payload.get('folder') or 'guarantee-proof').strip().lower() or 'guarantee-proof'
             try:
-                if folder not in ALLOWED_UPLOAD_FOLDERS:
-                    folder = 'guarantee-proof'
-                if not image_base64:
-                    raise ValueError('缺少图片内容')
-                header = ''
-                raw_text = image_base64
-                if raw_text.startswith('data:'):
-                    header, _, raw_text = raw_text.partition(',')
-                try:
-                    content = base64.b64decode(raw_text, validate=True)
-                except (binascii.Error, ValueError) as exc:
-                    raise ValueError('图片数据解析失败') from exc
-                if not content:
-                    raise ValueError('图片内容为空')
-                suffix = Path(str(image_name or '')).suffix.lower()
-                if suffix not in ('.png', '.jpg', '.jpeg', '.webp', '.gif'):
-                    if 'image/png' in header.lower():
-                        suffix = '.png'
-                    elif 'image/webp' in header.lower():
-                        suffix = '.webp'
-                    elif 'image/gif' in header.lower():
-                        suffix = '.gif'
-                    else:
-                        suffix = '.jpg'
-                if suffix == '.jpeg':
-                    suffix = '.jpg'
-                upload_dir = (UPLOADS_DIR / folder).resolve()
-                upload_dir.mkdir(parents=True, exist_ok=True)
-                file_name = f'{uuid.uuid4().hex}{suffix}'
-                file_path = upload_dir / file_name
-                file_path.write_bytes(content)
-                relative_url = f'/uploads/{folder}/{file_name}'
-                host = str(self.headers.get('Host') or f'127.0.0.1:{PORT}').strip()
+                relative_url = save_base64_image(image_base64, image_name=image_name, folder=folder)
                 build_json(self, 200, ok({
-                    'url': f'http://{host}{relative_url}',
+                    'url': build_public_file_url(self, relative_url),
                     'path': relative_url,
                 }, '上传成功'))
+
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'上传图片失败: {exc}'})
             return
+
 
 
         if parsed.path == '/api/recharge/create':
