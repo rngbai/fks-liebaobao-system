@@ -194,7 +194,7 @@ Page({
     Promise.all([
       sendRequest({ url: '/api/user/balance', showLoading: false, showError: false })
         .then(value => ({ ok: true, value })).catch(error => ({ ok: false, error })),
-      sendRequest({ url: '/api/home/content', showLoading: false, showError: false })
+      sendRequest({ url: `/api/home/content?_t=${Date.now()}`, showLoading: false, showError: false })
         .then(value => ({ ok: true, value })).catch(error => ({ ok: false, error })),
       sendRequest({ url: '/api/user/pending-summary', showLoading: false, showError: false })
         .then(value => ({ ok: true, value })).catch(error => ({ ok: false, error }))

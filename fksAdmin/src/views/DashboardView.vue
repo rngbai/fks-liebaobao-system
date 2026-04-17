@@ -150,8 +150,10 @@ function createEmptyDashboard() {
       pendingTransferCount: 0,
       pendingWithdrawCount: 0,
       pendingFeedbackCount: 0,
+      communityApplyPendingCount: 0,
       pendingActionCount: 0,
       totalPromotionReward: 0,
+
       platformAccountBalance: 0,
       allUsersWalletBalance: 0,
     },
@@ -561,7 +563,9 @@ const moduleCounts = reactive({
   'home-content': 0,
   'token-manage': 0,
   'community-manage': 0,
+  'community-apply-manage': 0,
 })
+
 
 const pagination = reactive({
   pendingGuarantee: createPagerState(10),
@@ -601,7 +605,9 @@ const countMap = computed(() => ({
   'promotion-manage': moduleCounts['promotion-manage'],
   'home-content': moduleCounts['home-content'],
   'token-manage': moduleCounts['token-manage'],
+  'community-apply-manage': moduleCounts['community-apply-manage'] || dashboard.value.totals.communityApplyPendingCount || 0,
   'pending-guarantee': listTotals.pendingGuarantee || dashboard.value.totals.pendingTransferCount || dashboard.value.pendingTransferList.length,
+
   'pending-withdraw': listTotals.pendingWithdraw || dashboard.value.totals.pendingWithdrawCount || dashboard.value.pendingWithdrawList.length,
   'pending-feedback': listTotals.pendingFeedback || dashboard.value.totals.pendingFeedbackCount || dashboard.value.pendingFeedbackList.length,
   recharge: listTotals.recharge || dashboard.value.totals.rechargeRecordCount || dashboard.value.rechargeList.length,
@@ -628,8 +634,10 @@ const sectionIconMap = {
   daily: DataAnalysis,
   'token-manage': Key,
   'community-manage': Promotion,
+  'community-apply-manage': ChatDotRound,
 }
-const pendingBadgeSections = new Set(['overview', 'pending-guarantee', 'pending-withdraw', 'pending-feedback', 'token-manage'])
+const pendingBadgeSections = new Set(['overview', 'pending-guarantee', 'pending-withdraw', 'pending-feedback', 'token-manage', 'community-apply-manage'])
+
 const currentSectionCount = computed(() => formatNumber(countMap.value[currentSection.value?.id] ?? 0))
 // ── 账户宝石余额实时刷新 ──────────────────────────────────────────────
 const liveGemBalance = ref(null)       // null=未查 | number=已查
@@ -1021,7 +1029,12 @@ function handleTokenCountChange(count) {
   setModuleCount('token-manage', count)
 }
 
+function handleCommunityApplyCountChange(count) {
+  setModuleCount('community-apply-manage', count)
+}
+
 async function reloadDashboardWithCurrentModule({ silent = true } = {}) {
+
   await loadDashboard({ silent })
   const listKey = getManageListKeyByModule(activeModule.value)
   if (!listKey) return
@@ -1914,9 +1927,15 @@ onMounted(async () => {
           <TokenManagePanel ref="tokenPanelRef" @count-change="handleTokenCountChange" />
         </template>
 
+        <template v-else-if="activeModule === 'community-apply-manage'">
+          <CommunityApplyManagePanel ref="communityApplyPanelRef" @count-change="handleCommunityApplyCountChange" />
+        </template>
+
+
         <template v-else-if="activeModule === 'community-manage'">
           <CommunityManagePanel />
         </template>
+
 
         <template v-else-if="activeModule === 'daily'">
           <el-card class="panel-card" shadow="never">

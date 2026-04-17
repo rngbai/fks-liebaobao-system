@@ -384,14 +384,22 @@ SCHEMA_STATEMENTS = [
         title VARCHAR(120) NOT NULL DEFAULT '',
         content VARCHAR(500) NOT NULL DEFAULT '',
         contact VARCHAR(64) NOT NULL DEFAULT '',
+        scene VARCHAR(32) NOT NULL DEFAULT '',
+        target_category VARCHAR(32) NOT NULL DEFAULT '',
+        target_category_label VARCHAR(64) NOT NULL DEFAULT '',
+        target_sub_tab VARCHAR(64) NOT NULL DEFAULT '',
+        linked_profile_id INT DEFAULT NULL,
         status VARCHAR(16) NOT NULL DEFAULT 'pending',
         admin_reply VARCHAR(255) NOT NULL DEFAULT '',
         handled_at DATETIME DEFAULT NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_user_created (user_id, created_at DESC),
-        INDEX idx_status_created (status, created_at DESC)
+        INDEX idx_status_created (status, created_at DESC),
+        INDEX idx_feedback_type_created (feedback_type, created_at DESC),
+        INDEX idx_feedback_scene_created (scene, created_at DESC)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+
     """,
     """
     CREATE TABLE IF NOT EXISTS user_messages (
@@ -1292,6 +1300,65 @@ def update_feedback_status(conn, feedback_id, status, admin_reply=''):
         )
 
     return find_feedback_entry(conn, feedback_id)
+
+
+
+def approve_community_feedback(conn, feedback_id, profile_payload, admin_reply=''):
+    feedback_id = int(feedback_id or 0)
+    if feedback_id <= 0:
+        raise ValueError('缺少有效的反馈编号')
+
+    feedback_row = find_feedback_entry_for_update(conn, feedback_id)
+    if not feedback_row:
+        raise ValueError('未找到反馈记录')
+    if normalize_feedback_scene(feedback_row.get('scene')) != FEEDBACK_SCENE_COMMUNITY_APPLY:
+        raise ValueError('该记录不是名流认证申请')
+    if (feedback_row.get('status') or FEEDBACK_STATUS_PENDING) != FEEDBACK_STATUS_PENDING:
+        raise ValueError('该认证申请已处理，不能重复通过')
+    if int(feedback_row.get('linked_profile_id') or 0) > 0:
+        raise ValueError('该认证申请已关联名流记录，不能重复通过')
+
+    profile_data = dict(profile_payload or {})
+
+    if not str(profile_data.get('category') or '').strip():
+        profile_data['category'] = feedback_row.get('target_category') or ''
+    if profile_data.get('sub_tab') is None or str(profile_data.get('sub_tab') or '').strip() == '':
+        profile_data['sub_tab'] = feedback_row.get('target_sub_tab') or ''
+    if not str(profile_data.get('nickname') or '').strip():
+        profile_data['nickname'] = feedback_row.get('user_nick_name') or '社区名流'
+    if not str(profile_data.get('bio') or '').strip():
+        profile_data['bio'] = feedback_row.get('content') or ''
+    if not str(profile_data.get('wechat') or '').strip() and not str(profile_data.get('qq') or '').strip():
+        profile_data['wechat'] = feedback_row.get('contact') or ''
+    if not str(profile_data.get('badge_type') or '').strip():
+        profile_data['badge_type'] = 'verified'
+    if not str(profile_data.get('badge_label') or '').strip():
+        profile_data['badge_label'] = '认证'
+    if 'is_active' not in profile_data:
+        profile_data['is_active'] = True
+
+    created_profile = create_community_profile(conn, profile_data)
+    reply_text = str(admin_reply or '').strip() or '社区名流认证已通过，已加入对应板块展示。'
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            '''
+            UPDATE user_feedback
+            SET status=%s,
+                admin_reply=%s,
+                linked_profile_id=%s,
+                handled_at=CURRENT_TIMESTAMP,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE id=%s
+            ''',
+            (FEEDBACK_STATUS_COMPLETED, reply_text[:255], int(created_profile.get('id') or 0), feedback_id)
+        )
+
+    return {
+        'feedback': find_feedback_entry(conn, feedback_id),
+        'profile': created_profile,
+    }
+
 
 
 
@@ -2508,8 +2575,14 @@ def serialize_manage_feedback_row(row):
         'contact': row.get('contact') or '',
         'account': row.get('user_account') or '',
         'beastId': normalize_beast_id_value(row.get('user_beast_id')),
+        'scene': row.get('scene') or '',
+        'targetCategory': row.get('target_category') or '',
+        'targetCategoryLabel': row.get('target_category_label') or '',
+        'targetSubTab': row.get('target_sub_tab') or '',
+        'linkedProfileId': int(row.get('linked_profile_id') or 0),
     })
     return payload
+
 
 
 
@@ -2770,6 +2843,46 @@ def find_manage_user_for_import(conn, account='', beast_id='', phone='', email='
                 return row
     return None
 
+
+
+def update_user_status(conn, user_id, status, admin_note=''):
+    """设置用户状态：1=正常, 0=拉黑(停用)"""
+    user_id = int(user_id or 0)
+    if user_id <= 0:
+        raise ValueError('缺少有效的用户编号')
+    new_status = 1 if int(status or 0) > 0 else 0
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT id, nick_name, status FROM users WHERE id=%s', (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise ValueError('未找到该用户')
+        cursor.execute(
+            'UPDATE users SET status=%s, updated_at=CURRENT_TIMESTAMP WHERE id=%s',
+            (new_status, user_id)
+        )
+        conn.commit()
+    meta = get_manage_user_status_meta(new_status)
+    return {'userId': user_id, 'status': meta['value'], 'statusText': meta['text'], 'statusClass': meta['class']}
+
+
+def delete_user_account(conn, user_id):
+    """彻底删除用户及关联数据（不可逆）"""
+    user_id = int(user_id or 0)
+    if user_id <= 0:
+        raise ValueError('缺少有效的用户编号')
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT id, nick_name FROM users WHERE id=%s', (user_id,))
+        user = cursor.fetchone()
+        if not user:
+            raise ValueError('未找到该用户')
+        cursor.execute('DELETE FROM wallet_transactions WHERE user_id=%s', (user_id,))
+        cursor.execute('DELETE FROM user_wallets WHERE user_id=%s', (user_id,))
+        cursor.execute('DELETE FROM recharge_orders WHERE user_id=%s', (user_id,))
+        cursor.execute('DELETE FROM transfer_requests WHERE user_id=%s', (user_id,))
+        cursor.execute('DELETE FROM feedbacks WHERE user_id=%s', (user_id,))
+        cursor.execute('DELETE FROM users WHERE id=%s', (user_id,))
+        conn.commit()
+    return {'userId': user_id, 'nickName': user.get('nick_name') or ''}
 
 
 def import_manage_users(conn, raw_text=''):
@@ -3815,12 +3928,14 @@ def build_manage_transfer_request_payload(conn, query='', status='all', page=1, 
 
 
 
-def build_manage_feedback_payload(conn, query='', status='all', page=1, page_size=20, pending_only=False):
+def build_manage_feedback_payload(conn, query='', status='all', page=1, page_size=20, pending_only=False, feedback_type=None, scene=''):
     page = max(1, int(page or 1))
     page_size = max(1, min(100, int(page_size or 20)))
     offset = (page - 1) * page_size
     keyword = str(query or '').strip()
     normalized_status = str(status or 'all').strip() or 'all'
+    scoped_scene = normalize_feedback_scene(scene)
+    scoped_type = normalize_feedback_type(feedback_type, scoped_scene) if (feedback_type or scoped_scene) else None
 
     conditions = []
     params = []
@@ -3830,12 +3945,21 @@ def build_manage_feedback_payload(conn, query='', status='all', page=1, page_siz
     elif normalized_status not in ('', 'all'):
         conditions.append('f.status=%s')
         params.append(normalized_status)
+    if scoped_type:
+        conditions.append('f.feedback_type=%s')
+        params.append(scoped_type)
+    if scoped_scene:
+        conditions.append('f.scene=%s')
+        params.append(scoped_scene)
+    else:
+        conditions.append('(f.scene IS NULL OR f.scene=%s)')
+        params.append('')
     if keyword:
         like_text = f"%{keyword}%"
         conditions.append(
-            "(CAST(f.id AS CHAR) LIKE %s OR f.title LIKE %s OR f.content LIKE %s OR f.type LIKE %s OR u.nick_name LIKE %s OR u.account LIKE %s OR u.beast_id LIKE %s OR f.contact LIKE %s OR f.admin_reply LIKE %s)"
+            "(CAST(f.id AS CHAR) LIKE %s OR f.title LIKE %s OR f.content LIKE %s OR f.feedback_type LIKE %s OR f.target_category_label LIKE %s OR f.target_sub_tab LIKE %s OR u.nick_name LIKE %s OR u.account LIKE %s OR u.beast_id LIKE %s OR f.contact LIKE %s OR f.admin_reply LIKE %s)"
         )
-        params.extend([like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text])
+        params.extend([like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text, like_text])
 
     where_sql = f"WHERE {' AND '.join(conditions)}" if conditions else ''
     count_sql = f'''
@@ -3863,6 +3987,7 @@ def build_manage_feedback_payload(conn, query='', status='all', page=1, page_siz
         'pagination': build_manage_pagination(page, page_size, total),
         'list': [serialize_manage_feedback_row(row) for row in rows],
     }
+
 
 
 
@@ -4062,10 +4187,12 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             SELECT COUNT(*) AS total_count
             FROM user_feedback
             WHERE DATE(created_at) BETWEEN %s AND %s
+              AND COALESCE(scene, '') != %s
             """,
-            (oldest_text, latest_text)
+            (oldest_text, latest_text, FEEDBACK_SCENE_COMMUNITY_APPLY)
         )
         range_feedback = cursor.fetchone() or {}
+
 
         cursor.execute(
             "SELECT COUNT(*) AS total_count FROM guarantee_orders WHERE status=%s AND seller_confirmed_at IS NOT NULL",
@@ -4080,10 +4207,11 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         pending_withdraw = cursor.fetchone() or {}
 
         cursor.execute(
-            "SELECT COUNT(*) AS total_count FROM user_feedback WHERE status=%s",
-            (FEEDBACK_STATUS_PENDING,)
+            "SELECT COUNT(*) AS total_count FROM user_feedback WHERE status=%s AND COALESCE(scene, '') != %s",
+            (FEEDBACK_STATUS_PENDING, FEEDBACK_SCENE_COMMUNITY_APPLY)
         )
         pending_feedback = cursor.fetchone() or {}
+
 
         cursor.execute(
             "SELECT COUNT(*) AS total_count FROM guarantee_orders WHERE status=%s",
@@ -4216,11 +4344,13 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
                    COUNT(*) AS feedback_count
             FROM user_feedback
             WHERE DATE(created_at) BETWEEN %s AND %s
+              AND COALESCE(scene, '') != %s
             GROUP BY DATE(created_at)
             ''',
-            (oldest_text, latest_text)
+            (oldest_text, latest_text, FEEDBACK_SCENE_COMMUNITY_APPLY)
         )
         feedback_created_rows = cursor.fetchall() or []
+
 
         cursor.execute(
             '''
@@ -4341,8 +4471,10 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             'pendingTransferCount': pending_transfer_count,
             'pendingWithdrawCount': pending_withdraw_count,
             'pendingFeedbackCount': pending_feedback_count,
-            'pendingActionCount': pending_transfer_count + pending_withdraw_count + pending_feedback_count,
+            'communityApplyPendingCount': pending_community_apply_count,
+            'pendingActionCount': pending_transfer_count + pending_withdraw_count + pending_feedback_count + pending_community_apply_count,
             'totalPromotionReward': int(promo_reward_summary.get('total') or 0),
+
             'platformAccountBalance': max(0, int(plat_recharge.get('total_recharged') or 0) - int(plat_transfer.get('total_transferred') or 0)),
             'allUsersWalletBalance': int(wallet_summary.get('total_balance') or 0),
         },
@@ -4513,13 +4645,28 @@ def create_community_profile(conn, data):
     values = {f: data.get(f, '') for f in fields}
     values['sort_order'] = int(data.get('sort_order', 0))
     values['is_active'] = int(bool(data.get('is_active', True)))
+    values['category'] = str(values.get('category') or '').strip()[:32]
+    values['sub_tab'] = str(values.get('sub_tab') or '').strip()[:64]
+    values['nickname'] = str(values.get('nickname') or '').strip()[:64]
+    values['bio'] = str(values.get('bio') or '').strip()[:255]
+    values['avatar_url'] = str(values.get('avatar_url') or '').strip()[:512]
+    values['wechat'] = str(values.get('wechat') or '').strip()[:64]
+    values['qq'] = str(values.get('qq') or '').strip()[:32]
+    values['badge_type'] = str(values.get('badge_type') or 'verified').strip()[:32] or 'verified'
+    values['badge_label'] = str(values.get('badge_label') or '认证').strip()[:32] or '认证'
+    values['game_tag'] = str(values.get('game_tag') or '').strip()[:64]
+    if not values['category']:
+        raise ValueError('缺少名流主分类')
+    if not values['nickname']:
+        raise ValueError('请填写名流昵称')
     cols = ', '.join(fields)
     placeholders = ', '.join(['%s'] * len(fields))
     sql = f'INSERT INTO community_profiles ({cols}) VALUES ({placeholders})'
     with conn.cursor() as cur:
         cur.execute(sql, [values[f] for f in fields])
-    conn.commit()
-    return get_community_profile(conn, conn.insert_id())
+        profile_id = cur.lastrowid
+    return get_community_profile(conn, profile_id)
+
 
 
 def update_community_profile(conn, profile_id, data):

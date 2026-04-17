@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { api } from '../lib/api'
 import { formatNumber } from '../utils/format'
 
@@ -213,6 +213,62 @@ async function submitImport() {
   }
 }
 
+const actionBusy = ref('')
+
+async function handleBanUser(row) {
+  const isBanned = row.status === 0
+  const action = isBanned ? '恢复正常' : '拉黑'
+  try {
+    await ElMessageBox.confirm(
+      isBanned
+        ? `确认恢复「${row.nickName || '该用户'}」为正常状态？`
+        : `确认拉黑「${row.nickName || '该用户'}」？拉黑后该账户将无法正常使用。`,
+      `${action}用户`,
+      { type: 'warning', confirmButtonText: `确认${action}`, cancelButtonText: '取消' }
+    )
+  } catch { return }
+
+  actionBusy.value = String(row.id)
+  try {
+    await api.post('/api/manage/users/ban', { user_id: row.id, status: isBanned ? 1 : 0 })
+    ElMessage.success(`用户已${action}`)
+    await loadUsers({ silent: true })
+  } catch (error) {
+    ElMessage.error(error.message || `${action}失败`)
+  } finally {
+    actionBusy.value = ''
+  }
+}
+
+async function handleDeleteUser(row) {
+  try {
+    await ElMessageBox.confirm(
+      `确认永久删除「${row.nickName || '该用户'}」？此操作不可恢复，该用户的所有数据（钱包、订单、反馈）将被一并清除。`,
+      '删除用户',
+      { type: 'error', confirmButtonText: '确认删除', cancelButtonText: '取消' }
+    )
+  } catch { return }
+
+  try {
+    await ElMessageBox.confirm(
+      '请再次确认：删除后数据无法恢复！',
+      '二次确认',
+      { type: 'error', confirmButtonText: '我确定要删除', cancelButtonText: '取消' }
+    )
+  } catch { return }
+
+  actionBusy.value = String(row.id)
+  try {
+    await api.post('/api/manage/users/delete', { user_id: row.id })
+    ElMessage.success('用户已删除')
+    await loadUsers({ silent: true })
+  } catch (error) {
+    ElMessage.error(error.message || '删除失败')
+  } finally {
+    actionBusy.value = ''
+  }
+}
+
 defineExpose({
   reload: loadUsers,
 })
@@ -307,9 +363,25 @@ onMounted(() => {
             <div class="minor-text">更新：{{ row.updatedTime || '—' }}</div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" fixed="right" min-width="100">
+        <el-table-column label="操作" fixed="right" min-width="220">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            <el-space wrap>
+              <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+              <el-button
+                size="small"
+                :type="row.status === 0 ? 'success' : 'warning'"
+                plain
+                :loading="actionBusy === String(row.id)"
+                @click="handleBanUser(row)"
+              >{{ row.status === 0 ? '解除拉黑' : '拉黑' }}</el-button>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="actionBusy === String(row.id)"
+                @click="handleDeleteUser(row)"
+              >删除</el-button>
+            </el-space>
           </template>
         </el-table-column>
       </el-table>
@@ -333,6 +405,18 @@ onMounted(() => {
       <div class="detail-meta-row">
         <el-tag :type="tagType(detail.statusClass)" effect="plain">{{ detail.statusText || '未知状态' }}</el-tag>
         <span class="detail-source">{{ detail.sourceText || '小程序' }}</span>
+        <el-button
+          size="small"
+          :type="detail.status === 0 ? 'success' : 'warning'"
+          plain
+          @click="handleBanUser(detail); detailVisible = false"
+        >{{ detail.status === 0 ? '解除拉黑' : '拉黑账户' }}</el-button>
+        <el-button
+          size="small"
+          type="danger"
+          plain
+          @click="handleDeleteUser(detail); detailVisible = false"
+        >删除账号</el-button>
       </div>
 
       <el-descriptions :column="1" border class="detail-descriptions">

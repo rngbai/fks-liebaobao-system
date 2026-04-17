@@ -45,6 +45,13 @@ export const DASHBOARD_SECTIONS = [
     desc: 'Bug、建议与投诉的当前工作池',
   },
   {
+    id: 'community-apply-manage',
+    title: '名流认证管理',
+    eyebrow: 'COMMUNITY APPLY',
+    desc: '单独审核社区名流申请，通过后直接加入社区名流列表。',
+  },
+
+  {
     id: 'recharge',
     title: '充值记录',
     eyebrow: 'PAYMENT LOGS',

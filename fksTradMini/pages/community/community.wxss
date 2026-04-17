@@ -22,8 +22,46 @@ page { background: #F0F2FA; }
   letter-spacing: 0.5rpx;
 }
 
+.stats-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18rpx;
+  padding: 20rpx 24rpx 0;
+}
+
+.stats-card {
+  padding: 22rpx 24rpx;
+  border-radius: 22rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.05);
+}
+
+.stats-card--light {
+  background: linear-gradient(135deg, #eef1ff, #ffffff);
+}
+
+.stats-value {
+  display: block;
+  color: #1f2740;
+  font-size: 40rpx;
+  font-weight: 800;
+}
+
+.stats-value--small {
+  font-size: 30rpx;
+}
+
+.stats-label {
+  display: block;
+  margin-top: 10rpx;
+  color: #7d86a0;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
 /* 主分类 Tab */
 .cat-scroll {
+  margin-top: 18rpx;
   background: #fff;
   white-space: nowrap;
   border-bottom: 1rpx solid #ECEEF8;
@@ -215,6 +253,7 @@ page { background: #F0F2FA; }
   display: flex;
   gap: 16rpx;
   margin-top: 4rpx;
+  flex-wrap: wrap;
 }
 .contact-btn {
   display: flex;
@@ -231,23 +270,69 @@ page { background: #F0F2FA; }
 .qq-btn .contact-label { color: #1677FF; }
 .contact-icon { font-size: 26rpx; }
 
-/* 申请入驻 */
-.apply-bar {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 24rpx;
+.apply-panel {
   margin: 40rpx 24rpx 0;
   padding: 28rpx;
   background: #fff;
-  border-radius: 20rpx;
-  border: 2rpx dashed #C8CCFF;
+  border-radius: 24rpx;
+  box-shadow: 0 10rpx 30rpx rgba(91,110,245,0.08);
 }
-.apply-text { font-size: 28rpx; color: #888; }
+
+.apply-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.apply-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.apply-title {
+  display: block;
+  color: #1f2740;
+  font-size: 32rpx;
+  font-weight: 800;
+}
+
+.apply-desc {
+  display: block;
+  margin-top: 12rpx;
+  color: #7d86a0;
+  font-size: 24rpx;
+  line-height: 1.7;
+}
+
 .apply-btn {
+  padding: 0 28rpx;
+  min-width: 160rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #5B6EF5, #7B8EFF);
+  color: #fff;
   font-size: 28rpx;
-  color: #5B6EF5;
   font-weight: 700;
+  flex-shrink: 0;
+}
+
+.apply-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14rpx;
+  margin-top: 22rpx;
+}
+
+.apply-tag {
+  padding: 10rpx 18rpx;
+  border-radius: 999rpx;
+  background: #EEF1FF;
+  color: #5B6EF5;
+  font-size: 22rpx;
+  font-weight: 600;
 }
 
 .bottom-safe { height: 60rpx; }

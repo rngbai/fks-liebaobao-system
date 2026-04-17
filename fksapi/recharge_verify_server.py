@@ -32,6 +32,7 @@ from config import token, userId
 from db_mysql import (
     DEFAULT_CANCEL_LIMIT,
     FEEDBACK_SCENE_COMMUNITY_APPLY,
+    approve_community_feedback,
     bind_user_inviter,
     build_feedback_payload,
 
@@ -69,6 +70,8 @@ from db_mysql import (
     create_transfer_request,
     find_guarantee_order,
     import_manage_users,
+    update_user_status,
+    delete_user_account,
     list_public_guarantee_orders,
     seller_confirm_guarantee_order,
     seller_reject_guarantee_order,
@@ -115,7 +118,7 @@ _CW_WX_CONFIG = {
 }
 _CW_LOGIN_DOMAIN = "android-api.lucklyworld.com"
 _CW_PKG = "com.caike.lomo"
-_CW_VER = "4.3.5"
+_CW_VER = "4.5.0"
 _CW_CHANNEL = "official"
 _CW_CH_CODE = "403005"
 
@@ -129,8 +132,9 @@ def _qr_fetch_image(q_uuid: str) -> bytes:
     """拉取二维码图片字节，不依赖 PIL。"""
     import requests as _req
     hdrs = {
-        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
-        "accept": "image/avif,image/webp,image/apng,*/*;q=0.8",
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/126.0 Safari/537.36",
+        "accept": "image/avif,image/webp,image/apng,image/png,image/jpeg,*/*;q=0.8",
+        "referer": "https://open.weixin.qq.com/",
     }
     r = _req.get(f"https://open.weixin.qq.com/connect/qrcode/{q_uuid}", headers=hdrs, timeout=15)
     r.raise_for_status()
@@ -142,13 +146,13 @@ def _qr_fetch_uuid() -> str:
     import requests as _req
     hdrs = {
         "user-agent": (
-            "Mozilla/5.0 (Linux; Android 9; PBBT00 Build/PPR1.180610.011; wv) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/70.0.3538.110 "
-            "Mobile Safari/537.36 MicroMessenger/7.0.17"
+            "Mozilla/5.0 (Linux; Android 12; BVL-AN16 Build/HUAWEIBVL-AN16; wv) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/116.0.0.0 "
+            "Mobile Safari/537.36 MicroMessenger/8.0.47.2560"
         ),
         "Host": "open.weixin.qq.com",
     }
-    r = _req.get("http://open.weixin.qq.com/connect/app/qrconnect",
+    r = _req.get("https://open.weixin.qq.com/connect/app/qrconnect",
                  params=_CW_WX_CONFIG, headers=hdrs, timeout=20)
     r.raise_for_status()
     m = re.search(r'uuid:\s*"([^"]+)"', r.text or "")
@@ -161,7 +165,7 @@ def _qr_poll_and_login(session_id: str, q_uuid: str):
     """后台线程：轮询微信扫码结果，成功则换潮玩 token 并存入会话。"""
     import requests as _req, hashlib as _hlib, random as _rand, string as _str
     hdrs = {
-        "user-agent": "Mozilla/5.0 MicroMessenger/7.0.17",
+        "user-agent": "Mozilla/5.0 MicroMessenger/8.0.47.2560",
         "Host": "long.open.weixin.qq.com",
     }
     params = {"uuid": q_uuid, "f": "url", "_": int(time.time() * 1000)}
@@ -238,7 +242,7 @@ def _fetch_live_gem_balance(user_id: str, token: str, token_type: str = 'fks') -
     _HOST       = "fks-api.lucklyworld.com"
     _PATH       = "/v11/api/market/index"
 
-    ua = ("com.caike.lomo/4.3.5 (Linux; U; Android 12; zh-cn) (official; 403005)"
+    ua = ("com.caike.lomo/4.5.0 (Linux; U; Android 12; zh-cn) (official; 403005)"
           if str(token_type).lower() == 'cw'
           else f"{_PKG}/{_VER}-{_CHANNEL} Dalvik/2.1.0 (Linux; U; Android 12; BVL-AN16 Build/68e417b.1)")
 
@@ -642,6 +646,12 @@ def revoke_admin_session(session_token):
 def verify_admin_login(username, password):
     return username == ADMIN_USERNAME and password == ADMIN_PASSWORD
 
+
+
+def check_user_active(user_row):
+    """如果用户被拉黑(status=0)则抛 PermissionError"""
+    if int(user_row.get('status') or 1) == 0:
+        raise PermissionError('该账户已被停用，请联系管理员')
 
 
 def make_profile(payload, headers):
@@ -1129,14 +1139,17 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             page_size = max(1, to_int(params.get('page_size', ['20'])[0], 20))
             query = str(params.get('query', [''])[0] or '').strip()
             status = str(params.get('status', ['all'])[0] or 'all').strip()
+            feedback_type = str(params.get('type', [''])[0] or '').strip() or None
+            scene = str(params.get('scene', [''])[0] or '').strip()
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = build_manage_feedback_payload(conn, query=query, status=status, page=page, page_size=page_size)
+                    data = build_manage_feedback_payload(conn, query=query, status=status, page=page, page_size=page_size, feedback_type=feedback_type, scene=scene)
                     conn.commit()
                 build_json(self, 200, ok(data, '查询成功'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取反馈档案失败: {exc}'})
             return
+
 
         if parsed.path == '/api/manage/pending-guarantees':
             if not self.ensure_admin():
@@ -1178,14 +1191,17 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             page_size = max(1, to_int(params.get('page_size', ['20'])[0], 20))
             query = str(params.get('query', [''])[0] or '').strip()
             status = str(params.get('status', ['all'])[0] or 'all').strip()
+            feedback_type = str(params.get('type', [''])[0] or '').strip() or None
+            scene = str(params.get('scene', [''])[0] or '').strip()
             try:
                 with get_connection(autocommit=False) as conn:
-                    data = build_manage_feedback_payload(conn, query=query, status=status, page=page, page_size=page_size, pending_only=True)
+                    data = build_manage_feedback_payload(conn, query=query, status=status, page=page, page_size=page_size, pending_only=True, feedback_type=feedback_type, scene=scene)
                     conn.commit()
                 build_json(self, 200, ok(data, '查询成功'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取待处理反馈失败: {exc}'})
             return
+
 
         if parsed.path == '/api/manage/token-config':
             if not self.ensure_admin():
@@ -1275,8 +1291,8 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
         if parsed.path.startswith('/api/community'):
             try:
-                category = params.get('category', [None])[0]
-                sub_tab = params.get('sub_tab', [None])[0]
+                category = str(params.get('category', [''])[0] or '').strip() or None
+                sub_tab = str(params.get('sub_tab', [''])[0] or '').strip() or None
                 with get_connection() as conn:
                     rows = list_community_profiles(conn, category=category, sub_tab=sub_tab, active_only=True)
                 build_json(self, 200, ok({'list': rows}, '查询成功'))
@@ -1379,6 +1395,33 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 }, '用户导入完成'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'导入用户失败: {exc}'})
+            return
+
+        if parsed.path == '/api/manage/users/ban':
+            user_id = to_int(payload.get('user_id') or payload.get('userId'), 0)
+            status = payload.get('status')
+            if user_id <= 0:
+                build_json(self, 200, {'ok': False, 'message': '缺少用户编号'})
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    result = update_user_status(conn, user_id, status)
+                build_json(self, 200, ok(result, f"用户已{'恢复正常' if result['status'] else '拉黑'}"))
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'操作失败: {exc}'})
+            return
+
+        if parsed.path == '/api/manage/users/delete':
+            user_id = to_int(payload.get('user_id') or payload.get('userId'), 0)
+            if user_id <= 0:
+                build_json(self, 200, {'ok': False, 'message': '缺少用户编号'})
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    result = delete_user_account(conn, user_id)
+                build_json(self, 200, ok(result, f"用户 {result.get('nickName', '')} 已删除"))
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'删除用户失败: {exc}'})
             return
 
         if parsed.path == '/api/manage/home-content':
@@ -1489,6 +1532,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             try:
                 with get_connection(autocommit=False) as conn:
                     user_row, wallet_row = get_or_create_user(conn, user_key, profile)
+                    check_user_active(user_row)
                     live_uid, _, _, live_user_name = self.get_live_credentials(conn)
                     beast_id = str(live_uid or payload.get('beast_id') or RECEIVER_BEAST_ID).strip()
                     beast_nick = str(live_user_name or payload.get('beast_nick') or RECEIVER_BEAST_NICK).strip()
@@ -1613,6 +1657,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             try:
                 with get_connection(autocommit=False) as conn:
                     user_row, _ = get_or_create_user(conn, user_key, profile)
+                    check_user_active(user_row)
                     order_row = create_guarantee_order(
                         conn,
                         user_row,
@@ -1629,6 +1674,9 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                     'order': serialize_guarantee_row(order_row),
                     'wallet': serialize_wallet(wallet_row),
                 }, '担保单已创建'))
+            except PermissionError as exc:
+                status, body = fail(str(exc))
+                build_json(self, status, body)
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'创建担保单失败: {exc}'})
             return
@@ -1672,6 +1720,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             try:
                 with get_connection(autocommit=False) as conn:
                     user_row, wallet_row = get_or_create_user(conn, user_key, profile)
+                    check_user_active(user_row)
                     request_row = create_transfer_request(conn, user_row, request_amount, user_note=user_note)
                     wallet_row = get_or_create_user(conn, user_key, profile)[1]
                     data = build_transfer_state(conn, user_row, wallet_row, limit=20)
@@ -1680,7 +1729,9 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                     **data,
                     'request': serialize_transfer_request(request_row),
                 }, '转出申请已提交'))
-
+            except PermissionError as exc:
+                status, body = fail(str(exc))
+                build_json(self, status, body)
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'提交转出申请失败: {exc}'})
             return
@@ -1810,10 +1861,12 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             try:
                 with get_connection() as conn:
                     row = create_community_profile(conn, payload)
+                    conn.commit()
                 build_json(self, 200, ok({'profile': row}, '名流已添加'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'添加名流失败: {exc}'})
             return
+
 
         if parsed.path.startswith('/api/manage/community/'):
             if not self.ensure_admin():
@@ -1824,13 +1877,16 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 with get_connection() as conn:
                     if action == 'delete':
                         delete_community_profile(conn, profile_id)
+                        conn.commit()
                         build_json(self, 200, ok({}, '已删除'))
                     else:
                         row = update_community_profile(conn, profile_id, payload)
+                        conn.commit()
                         build_json(self, 200, ok({'profile': row}, '已更新'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'操作名流失败: {exc}'})
             return
+
 
         if parsed.path == '/api/manage/promotion/settle-monthly':
             if not self.ensure_admin():
@@ -1861,17 +1917,28 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             feedback_id = to_int(payload.get('feedback_id') or payload.get('feedbackId') or payload.get('id'), 0)
             status = str(payload.get('status') or '').strip()
             admin_reply = str(payload.get('admin_reply') or payload.get('adminReply') or '').strip()
+            approve_to_profile = str(payload.get('approve_to_profile') or payload.get('approveToProfile') or '').strip().lower() in ('1', 'true', 'yes')
             if feedback_id <= 0:
                 build_json(self, 200, {'ok': False, 'message': '缺少反馈编号'})
                 return
             try:
                 with get_connection(autocommit=False) as conn:
-                    feedback_row = update_feedback_status(conn, feedback_id, status, admin_reply=admin_reply)
-                    conn.commit()
-                build_json(self, 200, ok({'feedback': serialize_manage_feedback_row(feedback_row)}, '反馈状态已更新'))
+                    if approve_to_profile:
+                        profile_payload = payload.get('profile') or {}
+                        approved = approve_community_feedback(conn, feedback_id, profile_payload, admin_reply=admin_reply)
+                        conn.commit()
+                        build_json(self, 200, ok({
+                            'feedback': serialize_manage_feedback_row(approved['feedback']),
+                            'profile': approved['profile'],
+                        }, '认证申请已通过并加入名流列表'))
+                    else:
+                        feedback_row = update_feedback_status(conn, feedback_id, status, admin_reply=admin_reply)
+                        conn.commit()
+                        build_json(self, 200, ok({'feedback': serialize_manage_feedback_row(feedback_row)}, '反馈状态已更新'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'更新反馈状态失败: {exc}'})
             return
+
 
         build_json(self, 404, {'ok': False, 'message': '接口不存在'})
 

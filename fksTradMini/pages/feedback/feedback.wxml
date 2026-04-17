@@ -1,16 +1,27 @@
 <view class="container">
   <view class="hero-card">
     <view>
-      <text class="hero-title">问题反馈</text>
-      <text class="hero-sub">你的每条建议和 Bug 反馈，我们都会认真处理。</text>
+      <text class="hero-title">{{pageTitle}}</text>
+      <text class="hero-sub">{{pageSubtitle}}</text>
     </view>
     <view class="hero-meta">
       <view class="meta-pill">今日已提交 {{feedbackMeta.todayCount}} / {{feedbackMeta.dailyLimit}}</view>
       <view class="meta-pill meta-pill--light">剩余 {{feedbackMeta.remainingCount}} 次</view>
     </view>
+    <view class="scene-badges" wx:if="{{sceneBadgeList.length}}">
+      <text class="scene-badge" wx:for="{{sceneBadgeList}}" wx:key="*this">{{item}}</text>
+    </view>
   </view>
 
-  <view class="tab-bar">
+  <view class="target-card" wx:if="{{sceneMode}}">
+    <view class="target-head">
+      <text class="target-title">申请板块</text>
+      <text class="target-highlight">{{targetLabel || '社区名流'}}</text>
+    </view>
+    <text class="target-desc">提交后进入人工审核，通过后才会展示在社区名流列表。</text>
+  </view>
+
+  <view class="tab-bar" wx:if="{{!sceneMode}}">
     <view
       wx:for="{{tabs}}"
       wx:key="key"
@@ -23,15 +34,15 @@
   </view>
 
   <view class="tips-card">
-    <text class="tips-text">为避免恶意刷屏，单个用户每天最多可提交 {{feedbackMeta.dailyLimit}} 次反馈。</text>
+    <text class="tips-text">{{tipsText}}</text>
   </view>
 
   <view class="list-wrap" wx:if="{{list.length}}">
     <view class="feedback-card" wx:for="{{list}}" wx:key="id">
       <view class="card-top">
         <view class="top-left">
-          <text class="type-badge type-{{item.type === 'Bug' ? 'bug' : 'suggest'}}">{{item.type}}</text>
-          <text class="mine-tag" wx:if="{{activeTab === 'all' && item.isMine}}">我的</text>
+          <text class="type-badge type-{{item.typeClass || 'suggest'}}">{{item.type}}</text>
+          <text class="mine-tag" wx:if="{{!sceneMode && activeTab === 'all' && item.isMine}}">我的</text>
         </view>
         <text class="status-text status-{{item.statusClass}}">{{item.statusText}}</text>
       </view>
@@ -52,26 +63,31 @@
   </view>
 
   <view class="empty-wrap" wx:elif="{{!loading}}">
-    <text class="empty-icon">💬</text>
-    <text class="empty-title">{{activeTab === 'mine' ? '你还没有提交过反馈' : '暂时还没有反馈内容'}}</text>
-    <text class="empty-sub">点击右下角按钮，告诉我们你遇到的问题或建议。</text>
+    <text class="empty-icon">{{sceneMode ? '🪪' : '💬'}}</text>
+    <text class="empty-title">{{sceneMode ? emptyTitleMine : (activeTab === 'mine' ? emptyTitleMine : emptyTitleAll)}}</text>
+    <text class="empty-sub">{{emptySub}}</text>
   </view>
 
   <view class="loading-wrap" wx:if="{{loading}}">
-    <text class="loading-text">反馈加载中...</text>
+    <text class="loading-text">{{sceneMode ? '申请记录加载中...' : '反馈加载中...'}}</text>
   </view>
 
-  <view class="fab" bindtap="openComposer">+</view>
+  <view class="fab {{sceneMode ? 'fab--text' : ''}}" bindtap="openComposer">{{sceneMode ? '申请认证' : '+'}}</view>
 
   <view class="composer-mask" wx:if="{{showComposer}}" bindtap="closeComposer">
     <view class="composer-sheet" catchtap="noop">
       <view class="sheet-head">
-        <text class="sheet-title">提交反馈</text>
+        <text class="sheet-title">{{composerTitle}}</text>
         <text class="sheet-close" bindtap="closeComposer">✕</text>
       </view>
 
       <view class="sheet-card">
-        <view class="form-item">
+        <view class="scene-tip-box" wx:if="{{sceneMode}}">
+          <text class="scene-tip-title">认证说明</text>
+          <text class="scene-tip-text">请填写擅长领域、服务内容、联系方式等真实信息；同一用户每天最多提交 {{feedbackMeta.dailyLimit}} 次申请。</text>
+        </view>
+
+        <view class="form-item" wx:if="{{!sceneMode}}">
           <text class="label">反馈类型</text>
           <picker bindchange="onTypeChange" value="{{typeIndex}}" range="{{typeOptions}}">
             <view class="picker-row">
@@ -82,10 +98,10 @@
         </view>
 
         <view class="form-item vertical">
-          <text class="label">反馈标题</text>
+          <text class="label">{{sceneMode ? '申请标题' : '反馈标题'}}</text>
           <input
             class="text-input"
-            placeholder="例如：技能数据不对 / 增加某个功能"
+            placeholder="{{titlePlaceholder}}"
             value="{{title}}"
             maxlength="40"
             bindinput="onTitleInput"
@@ -94,10 +110,10 @@
         </view>
 
         <view class="form-item vertical">
-          <text class="label">详细描述</text>
+          <text class="label">{{sceneMode ? '申请说明' : '详细描述'}}</text>
           <textarea
             class="text-area"
-            placeholder="请尽量写清楚问题现象、出现位置、希望如何优化..."
+            placeholder="{{descPlaceholder}}"
             value="{{desc}}"
             maxlength="500"
             bindinput="onDescInput"
@@ -107,10 +123,10 @@
         </view>
 
         <view class="form-item vertical">
-          <text class="label">联系方式（可选）</text>
+          <text class="label">联系方式{{sceneMode ? '（必填）' : '（可选）'}}</text>
           <input
             class="text-input"
-            placeholder="QQ / 微信 / 手机号，方便我们联系你"
+            placeholder="{{contactPlaceholder}}"
             value="{{contact}}"
             maxlength="32"
             bindinput="onContactInput"
@@ -122,7 +138,7 @@
       <view class="sheet-actions">
         <view class="sheet-btn sheet-btn--ghost" bindtap="closeComposer">取消</view>
         <view class="sheet-btn sheet-btn--primary {{submitting ? 'is-disabled' : ''}}" bindtap="submitFeedback">
-          {{submitting ? '提交中...' : '确认提交'}}
+          {{submitting ? '提交中...' : submitButtonText}}
         </view>
       </view>
     </view>
