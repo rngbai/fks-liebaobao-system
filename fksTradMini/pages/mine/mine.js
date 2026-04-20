@@ -57,7 +57,7 @@ Page({
   data: {
     userInfo: {},
     gemBalance: 0,
-    unreadCount: 2,
+    unreadCount: 0,
     stats: { guaranteeTotal: 0, guaranteeDone: 0, recommendCount: 0, earnedGem: 0 }
   },
 
@@ -66,6 +66,8 @@ Page({
   },
 
   onShow() {
+    const unreadCount = wx.getStorageSync('msg_unread_count')
+    this.setData({ unreadCount: typeof unreadCount === 'number' ? unreadCount : 0 })
     this.loadData()
   },
 

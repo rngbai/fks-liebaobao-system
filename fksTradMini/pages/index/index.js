@@ -84,7 +84,7 @@ const bannerCards = [
 
 const quickEntries = [
   { id: 'guarantee', icon: '🛡️', title: '担保中心', desc: '生成担保 / 查单', type: 'switchTab', url: '/pages/guarantee/guarantee' },
-  { id: 'market', icon: '🏪', title: '市场大厅', desc: '买卖信息速览', type: 'switchTab', url: '/pages/market/market' },
+  { id: 'market', icon: '🏪', title: '社区大厅', desc: '买卖信息速览', type: 'switchTab', url: '/pages/community/community' },
   { id: 'rank', icon: '🏆', title: '排行榜', desc: '独立榜单入口', type: 'navigate', url: '/pages/rank/rank', highlight: true },
   { id: 'recharge', icon: '/assets/baoshi.png', iconType: 'image', title: '快速转入', desc: '真实校验到账', type: 'navigate', url: '/pages/recharge/recharge' },
   { id: 'messages', icon: '📩', title: '消息中心', desc: '系统通知 / 提醒', type: 'navigate', url: '/pages/messages/messages' },

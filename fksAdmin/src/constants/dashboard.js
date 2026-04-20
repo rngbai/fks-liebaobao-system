@@ -24,14 +24,6 @@ export const DASHBOARD_SECTIONS = [
     desc: '维护首页轮播广告位、平台快报与中部活动推荐位。',
   },
   {
-    id: 'pending-guarantee',
-    title: '担保待确认',
-    eyebrow: 'GUARANTEE QUEUE',
-    desc: '查看已匹配担保单，等待卖家确认交易完成',
-  },
-
-
-  {
     id: 'pending-withdraw',
     title: '用户转出申请',
     eyebrow: 'WITHDRAW REVIEW',
@@ -59,9 +51,9 @@ export const DASHBOARD_SECTIONS = [
   },
   {
     id: 'guarantee',
-    title: '担保档案',
-    eyebrow: 'ESCROW ARCHIVE',
-    desc: '订单状态、截图凭证与后台备注',
+    title: '担保管理',
+    eyebrow: 'ESCROW MANAGEMENT',
+    desc: '统一管理担保单全流程：待匹配、待确认、已完成、申诉中、已关闭',
   },
   {
     id: 'feedback',

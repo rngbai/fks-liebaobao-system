@@ -6,17 +6,19 @@ import {
   ChatDotRound,
   Connection,
   DataAnalysis,
+  EditPen,
   Files,
   HomeFilled,
   Key,
   Money,
   Promotion,
-  Tickets,
   User,
 } from '@element-plus/icons-vue'
 import HomeContentManagePanel from '../components/HomeContentManagePanel.vue'
+import LayoutFeedbackManagePanel from '../components/LayoutFeedbackManagePanel.vue'
 import PromotionManagePanel from '../components/PromotionManagePanel.vue'
 import TokenManagePanel from '../components/TokenManagePanel.vue'
+import CommunityApplyManagePanel from '../components/CommunityApplyManagePanel.vue'
 import CommunityManagePanel from '../components/CommunityManagePanel.vue'
 import UserManagePanel from '../components/UserManagePanel.vue'
 
@@ -29,7 +31,6 @@ const router = useRouter()
 const auth = useAuthStore()
 const LIST_PAGE_SIZES = [10, 20, 50]
 const FILTER_PLACEHOLDERS = {
-  pendingGuarantee: '搜索保单号 / 卖家 / 买家 / 地球猎人 ID',
   pendingWithdraw: '搜索申请单号 / 用户 / 方块兽 ID / 备注',
   pendingFeedback: '搜索标题 / 内容 / 用户 / 联系方式',
   recharge: '搜索订单号 / 账号 / 方块兽 ID / 校验码',
@@ -38,9 +39,6 @@ const FILTER_PLACEHOLDERS = {
   daily: '搜索日期 / 充值 / 转出 / 新担保 / 反馈',
 }
 const LIST_STATUS_OPTIONS = {
-  pendingGuarantee: [
-    { label: '待卖家确认', value: 'matched' },
-  ],
   pendingWithdraw: [
     { label: '待处理', value: 'pending' },
   ],
@@ -58,6 +56,7 @@ const LIST_STATUS_OPTIONS = {
     { label: '待卖家确认', value: 'matched' },
     { label: '已完成', value: 'done' },
     { label: '申诉中', value: 'appeal' },
+    { label: '已关闭', value: 'closed' },
   ],
   feedback: [
     { label: '待处理', value: 'pending' },
@@ -67,12 +66,6 @@ const LIST_STATUS_OPTIONS = {
   ],
 }
 const MANAGE_LIST_CONFIG = {
-  pendingGuarantee: {
-    moduleId: 'pending-guarantee',
-    api: '/api/manage/pending-guarantees',
-    dataKey: 'pendingTransferList',
-    defaultPageSize: 10,
-  },
   pendingWithdraw: {
     moduleId: 'pending-withdraw',
     api: '/api/manage/transfer-requests',
@@ -557,6 +550,8 @@ const userPanelRef = ref(null)
 const promotionPanelRef = ref(null)
 const homeContentPanelRef = ref(null)
 const tokenPanelRef = ref(null)
+const communityApplyPanelRef = ref(null)
+const layoutFeedbackPanelRef = ref(null)
 const moduleCounts = reactive({
   'user-manage': 0,
   'promotion-manage': 0,
@@ -564,11 +559,11 @@ const moduleCounts = reactive({
   'token-manage': 0,
   'community-manage': 0,
   'community-apply-manage': 0,
+  'layout-feedback-manage': 0,
 })
 
 
 const pagination = reactive({
-  pendingGuarantee: createPagerState(10),
   pendingWithdraw: createPagerState(10),
   pendingFeedback: createPagerState(10),
   recharge: createPagerState(10),
@@ -576,7 +571,6 @@ const pagination = reactive({
   feedback: createPagerState(10),
 })
 const listFilters = reactive({
-  pendingGuarantee: createFilterState(),
   pendingWithdraw: createFilterState(),
   pendingFeedback: createFilterState(),
   recharge: createFilterState(),
@@ -585,7 +579,6 @@ const listFilters = reactive({
   daily: createFilterState(),
 })
 const listTotals = reactive({
-  pendingGuarantee: 0,
   pendingWithdraw: 0,
   pendingFeedback: 0,
   recharge: 0,
@@ -606,7 +599,7 @@ const countMap = computed(() => ({
   'home-content': moduleCounts['home-content'],
   'token-manage': moduleCounts['token-manage'],
   'community-apply-manage': moduleCounts['community-apply-manage'] || dashboard.value.totals.communityApplyPendingCount || 0,
-  'pending-guarantee': listTotals.pendingGuarantee || dashboard.value.totals.pendingTransferCount || dashboard.value.pendingTransferList.length,
+  'layout-feedback-manage': moduleCounts['layout-feedback-manage'],
 
   'pending-withdraw': listTotals.pendingWithdraw || dashboard.value.totals.pendingWithdrawCount || dashboard.value.pendingWithdrawList.length,
   'pending-feedback': listTotals.pendingFeedback || dashboard.value.totals.pendingFeedbackCount || dashboard.value.pendingFeedbackList.length,
@@ -625,7 +618,6 @@ const sectionIconMap = {
   'user-manage': User,
   'promotion-manage': Connection,
   'home-content': HomeFilled,
-  'pending-guarantee': Tickets,
   'pending-withdraw': Promotion,
   'pending-feedback': ChatDotRound,
   recharge: Money,
@@ -635,8 +627,9 @@ const sectionIconMap = {
   'token-manage': Key,
   'community-manage': Promotion,
   'community-apply-manage': ChatDotRound,
+  'layout-feedback-manage': EditPen,
 }
-const pendingBadgeSections = new Set(['overview', 'pending-guarantee', 'pending-withdraw', 'pending-feedback', 'token-manage', 'community-apply-manage'])
+const pendingBadgeSections = new Set(['overview', 'pending-withdraw', 'pending-feedback', 'token-manage', 'community-apply-manage'])
 
 const currentSectionCount = computed(() => formatNumber(countMap.value[currentSection.value?.id] ?? 0))
 // ── 账户宝石余额实时刷新 ──────────────────────────────────────────────
@@ -782,7 +775,6 @@ function buildRemotePager(listKey, rows = []) {
   }
 }
 
-const pendingGuaranteePager = computed(() => buildRemotePager('pendingGuarantee', dashboard.value.pendingTransferList))
 const pendingWithdrawPager = computed(() => buildRemotePager('pendingWithdraw', dashboard.value.pendingWithdrawList))
 const pendingFeedbackPager = computed(() => buildRemotePager('pendingFeedback', dashboard.value.pendingFeedbackList))
 const rechargePager = computed(() => buildRemotePager('recharge', dashboard.value.rechargeList))
@@ -796,7 +788,6 @@ function getManageListKeyByModule(moduleId = '') {
 }
 
 function getDashboardTotalByListKey(listKey) {
-  if (listKey === 'pendingGuarantee') return Number(dashboard.value.totals.pendingTransferCount || 0)
   if (listKey === 'pendingWithdraw') return Number(dashboard.value.totals.pendingWithdrawCount || 0)
   if (listKey === 'pendingFeedback') return Number(dashboard.value.totals.pendingFeedbackCount || 0)
   if (listKey === 'recharge') return Number(dashboard.value.totals.rechargeRecordCount || 0)
@@ -806,7 +797,6 @@ function getDashboardTotalByListKey(listKey) {
 }
 
 function applyDashboardListTotals() {
-  listTotals.pendingGuarantee = getDashboardTotalByListKey('pendingGuarantee') || dashboard.value.pendingTransferList.length
   listTotals.pendingWithdraw = getDashboardTotalByListKey('pendingWithdraw') || dashboard.value.pendingWithdrawList.length
   listTotals.pendingFeedback = getDashboardTotalByListKey('pendingFeedback') || dashboard.value.pendingFeedbackList.length
   listTotals.recharge = getDashboardTotalByListKey('recharge') || dashboard.value.rechargeList.length
@@ -948,7 +938,6 @@ function handleInspect(type, item) {
 
   if (type === 'recharge') return openDrawer(buildRechargeDetail(item))
   if (type === 'guarantee') return openDrawer(buildGuaranteeDetail(item))
-  if (type === 'pending-guarantee') return openDrawer(buildGuaranteeDetail(item, { fromQueue: true }))
   if (type === 'pending-withdraw') return openDrawer(buildWithdrawDetail(item))
   if (type === 'feedback') return openDrawer(buildFeedbackDetail(item))
   if (type === 'pending-feedback') return openDrawer(buildFeedbackDetail(item, { fromQueue: true }))
@@ -1033,6 +1022,10 @@ function handleCommunityApplyCountChange(count) {
   setModuleCount('community-apply-manage', count)
 }
 
+function handleLayoutFeedbackCountChange(count) {
+  setModuleCount('layout-feedback-manage', count)
+}
+
 async function reloadDashboardWithCurrentModule({ silent = true } = {}) {
 
   await loadDashboard({ silent })
@@ -1076,6 +1069,16 @@ async function handleRefresh() {
     refreshing.value = true
     try {
       await tokenPanelRef.value?.reload?.()
+    } finally {
+      refreshing.value = false
+    }
+    return
+  }
+
+  if (activeModule.value === 'layout-feedback-manage') {
+    refreshing.value = true
+    try {
+      await layoutFeedbackPanelRef.value?.reload?.()
     } finally {
       refreshing.value = false
     }
@@ -1438,97 +1441,9 @@ onMounted(async () => {
           <HomeContentManagePanel ref="homeContentPanelRef" @count-change="handleHomeContentCountChange" />
         </template>
 
-        <template v-else-if="activeModule === 'pending-guarantee'">
-          <el-card class="panel-card" shadow="never">
-            <template #header>
-              <div class="panel-head panel-head--between">
-                <span>担保待确认队列</span>
-                <el-tag type="warning">共 {{ pendingGuaranteePager.total }} 条</el-tag>
-              </div>
-
-            </template>
-            <div class="toolbar-row">
-              <el-input
-                v-model="listFilters.pendingGuarantee.query"
-                :placeholder="FILTER_PLACEHOLDERS.pendingGuarantee"
-                clearable
-                class="toolbar-input"
-                @keyup.enter="handleManageListSearch('pendingGuarantee')"
-              />
-              <el-select v-model="listFilters.pendingGuarantee.status" placeholder="全部状态" clearable class="toolbar-select">
-                <el-option label="全部状态" value="all" />
-                <el-option v-for="option in LIST_STATUS_OPTIONS.pendingGuarantee" :key="option.value" :label="option.label" :value="option.value" />
-              </el-select>
-              <el-button type="primary" plain @click="handleManageListSearch('pendingGuarantee')">查询</el-button>
-              <el-button @click="handleManageListReset('pendingGuarantee')">重置</el-button>
-            </div>
-            <el-table v-loading="loading" :data="pendingGuaranteePager.rows" border stripe empty-text="当前没有待确认的担保订单">
-
-              <el-table-column label="保单信息" min-width="220">
-                <template #default="{ row }">
-                  <div class="primary-text">{{ row.id || row.orderNo }}</div>
-                  <div class="minor-text">{{ row.petName || row.pet_name || '未填写兽王' }} · {{ formatNumber(row.tradeQuantity ?? row.trade_quantity ?? 1) }} 只</div>
-                </template>
-              </el-table-column>
-              <el-table-column label="卖家信息" min-width="220">
-                <template #default="{ row }">
-                  <div>{{ row.sellerNickName || '未设置卖家' }}</div>
-                  <div class="minor-text">地球猎人：{{ row.sellerGameNick || row.seller_game_nick || '—' }} / {{ row.sellerGameId || row.seller_game_id || '—' }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column label="买家信息" min-width="200">
-                <template #default="{ row }">
-                  <div>{{ row.buyerBeastNick || row.buyer_beast_nick || '未填写' }}</div>
-                  <div class="minor-text">方块兽 ID：{{ row.buyerBeastId || row.buyer_beast_id || '未填写' }}</div>
-                </template>
-              </el-table-column>
-              <el-table-column label="状态" min-width="120">
-                <template #default="{ row }">
-                  <el-tag :type="toTagType(row.statusClass || row.statusRaw || row.status)" effect="plain">{{ row.statusText || '待确认' }}</el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="金额" min-width="180">
-                <template #default="{ row }">
-                  <div>标价 {{ formatNumber(row.gemAmount ?? row.gem_amount ?? 0) }} 宝石</div>
-                  <div class="minor-text">卖家实扣 {{ formatNumber(row.sellerTotalCost ?? row.seller_total_cost ?? ((row.gemAmount ?? row.gem_amount ?? 0) + (row.feeAmount ?? row.fee_amount ?? 0))) }} / 买家实收 {{ formatNumber(row.actualReceive ?? row.actual_receive ?? 0) }}</div>
-                </template>
-              </el-table-column>
-
-              <el-table-column label="截图" min-width="120">
-                <template #default="{ row }">
-                  <el-tag :type="(row.buyerProofImage || row.buyer_proof_image) ? 'success' : 'info'" effect="plain">
-                    {{ (row.buyerProofImage || row.buyer_proof_image) ? '已上传' : '未上传' }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column label="匹配时间" min-width="160">
-                <template #default="{ row }">{{ row.matchedTime || row.matched_time || '—' }}</template>
-              </el-table-column>
-              <el-table-column label="操作" fixed="right" min-width="140">
-                <template #default="{ row }">
-                  <el-space wrap>
-                    <el-button link type="primary" @click="handleInspect('pending-guarantee', row)">详情</el-button>
-                    <el-button link @click="copyText({ label: '保单号', value: row.id || row.orderNo })">复制单号</el-button>
-                  </el-space>
-                </template>
-              </el-table-column>
-            </el-table>
-            <div class="pagination-row">
-              <el-pagination
-                background
-                layout="total, sizes, prev, pager, next, jumper"
-                :total="pendingGuaranteePager.total"
-                :current-page="pendingGuaranteePager.currentPage"
-                :page-size="pendingGuaranteePager.pageSize"
-                :page-sizes="LIST_PAGE_SIZES"
-                @current-change="handleManageListPageChange('pendingGuarantee', $event)"
-                @size-change="handleManageListPageSizeChange('pendingGuarantee', $event)"
-              />
-            </div>
-          </el-card>
+        <template v-else-if="activeModule === 'layout-feedback-manage'">
+          <LayoutFeedbackManagePanel ref="layoutFeedbackPanelRef" @count-change="handleLayoutFeedbackCountChange" />
         </template>
-
-
 
         <template v-else-if="activeModule === 'pending-withdraw'">
           <el-card class="panel-card" shadow="never">
@@ -1772,7 +1687,7 @@ onMounted(async () => {
           <el-card class="panel-card" shadow="never">
             <template #header>
               <div class="panel-head panel-head--between">
-                <span>担保档案</span>
+                <span>担保管理</span>
                 <el-tag effect="plain">共 {{ guaranteePager.total }} 条</el-tag>
               </div>
             </template>

@@ -49,8 +49,8 @@
       {
         "pagePath": "pages/community/community",
         "text": "社区",
-        "iconPath": "images/tabbar/jiaoyishichang_normal.png",
-        "selectedIconPath": "images/tabbar/jiaoyishichang_selected.png"
+        "iconPath": "images/shequ.png",
+        "selectedIconPath": "images/shequ.png"
       },
       {
         "pagePath": "pages/mine/mine",

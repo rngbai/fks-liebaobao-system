@@ -261,7 +261,9 @@
   border: 1rpx solid #e7eeff;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
 }
 
 .quick-item-highlight {
@@ -274,6 +276,7 @@
   min-height: 40rpx;
   display: flex;
   align-items: center;
+  justify-content: center;
 }
 
 .quick-icon {
@@ -292,6 +295,7 @@
   font-size: 28rpx;
   font-weight: 700;
   color: #15203f;
+  text-align: center;
 }
 
 .quick-desc {
@@ -299,6 +303,7 @@
   font-size: 20rpx;
   line-height: 1.55;
   color: #6f7894;
+  text-align: center;
 }
 
 .quick-item-highlight .quick-title,
