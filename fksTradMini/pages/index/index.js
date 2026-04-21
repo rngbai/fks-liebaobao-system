@@ -1,4 +1,10 @@
 const { requestApi: sendRequest } = require('../../utils/request')
+const { summarizeBatchRequestFailure } = require('../../utils/request-diagnostics')
+const {
+  createPageLoadState,
+  toErrorState,
+  toSuccessState,
+} = require('../../utils/page-load-state')
 
 const OFFICIAL_GROUP = {
   name: '方块兽交易交流群',
@@ -161,16 +167,20 @@ Page({
     officialGroup: OFFICIAL_GROUP,
     rankPreview: [],
     hotNotice: DEFAULT_HOME_NOTICE,
-    pendingSummary: { total: 0, pendingConfirm: 0, pendingMatch: 0, waitingSeller: 0, pendingTransfer: 0, unreadMessages: 0 }
+    pendingSummary: { total: 0, pendingConfirm: 0, pendingMatch: 0, waitingSeller: 0, pendingTransfer: 0, unreadMessages: 0 },
+    pageState: createPageLoadState('success')
   },
 
   onLoad(options = {}) {
+    this._loadTs = 0
     this.consumePromotionRef(options.ref)
     this.loadHomeData()
   },
 
   onShow() {
-    this.loadHomeData()
+    if (Date.now() - (this._loadTs || 0) >= 1500) {
+      this.loadHomeData()
+    }
   },
 
   consumePromotionRef(ref) {
@@ -188,6 +198,7 @@ Page({
   },
 
   loadHomeData() {
+    this._loadTs = Date.now()
     const savedUser = wx.getStorageSync('userInfo') || {}
     this.setData({ userInfo: savedUser, rankPreview: [] })
 
@@ -199,6 +210,7 @@ Page({
       sendRequest({ url: '/api/user/pending-summary', showLoading: false, showError: false })
         .then(value => ({ ok: true, value })).catch(error => ({ ok: false, error }))
     ]).then(([balanceResult, homeResult, pendingResult]) => {
+      const results = [balanceResult, homeResult, pendingResult]
       const nextData = {}
 
       if (balanceResult.ok) {
@@ -218,9 +230,19 @@ Page({
       }
 
       if (Object.keys(nextData).length) {
-        this.setData(nextData)
+        this.setData({
+          ...nextData,
+          pageState: toSuccessState()
+        })
+      } else {
+        const message = summarizeBatchRequestFailure(results) || '首页数据加载失败，请稍后重试'
+        this.setData({ pageState: toErrorState(message) })
       }
     })
+  },
+
+  retryLoadHomeData() {
+    this.loadHomeData()
   },
 
   handleTopBannerTap(e) {

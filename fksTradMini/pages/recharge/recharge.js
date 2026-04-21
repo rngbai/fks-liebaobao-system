@@ -1,4 +1,9 @@
 const { requestApi: sendRequest } = require('../../utils/request')
+const {
+  createPageLoadState,
+  toErrorState,
+  toSuccessState,
+} = require('../../utils/page-load-state')
 
 
 const ORDER_EXPIRE_MS = 10 * 60 * 1000
@@ -87,15 +92,19 @@ Page({
     cancelLimit: CANCEL_LIMIT,
     cancelRemain: CANCEL_LIMIT,
     orderExpireMinutes: ORDER_EXPIRE_MS / 60000,
-    verifyModeText: 'MySQL真实校验模式'
+    verifyModeText: 'MySQL真实校验模式',
+    pageState: createPageLoadState('loading')
   },
 
   onLoad() {
+    this._loadTs = 0
     this.loadRechargeState(true)
   },
 
   onShow() {
-    this.loadRechargeState(true)
+    if (Date.now() - (this._loadTs || 0) >= 1500) {
+      this.loadRechargeState(true)
+    }
     this.checkClipboardForTimeCode()
   },
 
@@ -121,6 +130,10 @@ Page({
       },
       fail: () => {}
     })
+  },
+
+  retryLoadRechargeState() {
+    this.loadRechargeState(false)
   },
 
   onHide() {
@@ -180,7 +193,10 @@ Page({
         matchedLogTime: '',
         verifyCode: options.keepVerifyCode ? this.data.verifyCode : ''
       })
-      this.setData(nextData)
+      this.setData({
+        ...nextData,
+        pageState: toSuccessState()
+      })
       this.startCountdown(pendingOrder)
       return
     }
@@ -197,10 +213,14 @@ Page({
         verifyCode: ''
       })
     }
-    this.setData(nextData)
+    this.setData({
+      ...nextData,
+      pageState: toSuccessState()
+    })
   },
 
   loadRechargeState(silent = false) {
+    this._loadTs = Date.now()
     this.requestApi({
       url: '/api/recharge/state',
       showLoading: !silent,
@@ -208,9 +228,7 @@ Page({
     }).then(payload => {
       this.applyState(payload.data || {})
     }).catch(error => {
-      if (!silent) {
-        wx.showToast({ title: error.message || error || '读取转入状态失败', icon: 'none' })
-      }
+      this.setData({ pageState: toErrorState(error.message || error || '??????????????') })
     })
   },
 

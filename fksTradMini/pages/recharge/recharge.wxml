@@ -14,6 +14,14 @@
     </view>
   </view>
 
+  <view class="page-inline-state page-inline-state--error" wx:if="{{pageState.status === 'error'}}">
+    <view class="page-inline-copy">
+      <text class="page-inline-title">转入状态同步失败</text>
+      <text class="page-inline-desc">{{pageState.errorMessage}}</text>
+    </view>
+    <view class="page-inline-action" bindtap="retryLoadRechargeState">重新加载</view>
+  </view>
+
   <view class="panel-card">
     <view class="panel-head">
       <view class="panel-title-row">

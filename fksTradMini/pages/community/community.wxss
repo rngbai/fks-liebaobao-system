@@ -1,5 +1,7 @@
-/* 社区名流页样式 */
-page { background: #F0F2FA; }
+/* 社区名流页：仅顶部导航 + 主分类 Tab 条深色；其余保持浅底原样 */
+page {
+  background: #F0F2FA;
+}
 
 .page {
   min-height: 100vh;
@@ -7,102 +9,71 @@ page { background: #F0F2FA; }
   padding-bottom: 40rpx;
 }
 
-/* 信任横幅 */
-.trust-banner {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  background: linear-gradient(135deg, #5B6EF5, #7B8EFF);
-  padding: 20rpx 32rpx;
-}
-.trust-icon { font-size: 32rpx; }
-.trust-text {
-  font-size: 24rpx;
-  color: rgba(255,255,255,0.92);
-  letter-spacing: 0.5rpx;
+.subnav-shell {
+  margin: 16rpx 24rpx 0;
+  min-height: 112rpx;
 }
 
-.stats-strip {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 18rpx;
-  padding: 20rpx 24rpx 0;
+.subnav-shell--captain {
+  min-height: 208rpx;
 }
 
-.stats-card {
-  padding: 22rpx 24rpx;
-  border-radius: 22rpx;
-  background: #ffffff;
-  box-shadow: 0 8rpx 24rpx rgba(15, 23, 42, 0.05);
-}
-
-.stats-card--light {
-  background: linear-gradient(135deg, #eef1ff, #ffffff);
-}
-
-.stats-value {
-  display: block;
-  color: #1f2740;
-  font-size: 40rpx;
-  font-weight: 800;
-}
-
-.stats-value--small {
-  font-size: 30rpx;
-}
-
-.stats-label {
-  display: block;
-  margin-top: 10rpx;
-  color: #7d86a0;
-  font-size: 24rpx;
-  line-height: 1.5;
-}
-
-/* 主分类 Tab */
+/* 主分类 Tab（与导航栏衔接的深色条 + 选中金胶囊） */
 .cat-scroll {
-  margin-top: 18rpx;
-  background: #fff;
+  width: 100%;
+  margin-top: 0;
+  background: #121212;
   white-space: nowrap;
-  border-bottom: 1rpx solid #ECEEF8;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.06);
 }
 .cat-tabs {
   display: inline-flex;
-  padding: 0 16rpx;
+  padding: 10rpx 12rpx 14rpx;
+  align-items: center;
 }
 .cat-tab {
   display: inline-flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  padding: 20rpx 28rpx 16rpx;
-  gap: 6rpx;
+  justify-content: center;
+  padding: 14rpx 22rpx;
+  margin: 0 4rpx;
   position: relative;
   transition: all 0.2s;
+  border-radius: 999rpx;
 }
-.cat-tab-icon { font-size: 36rpx; line-height: 1; }
 .cat-tab-label {
-  font-size: 24rpx;
-  color: #888;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.82);
   white-space: nowrap;
   font-weight: 500;
 }
-.cat-tab--active .cat-tab-label { color: #5B6EF5; font-weight: 700; }
+.cat-tab--active {
+  background: linear-gradient(180deg, #f3e2a5, #d4b871);
+  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.35);
+}
+.cat-tab--active .cat-tab-label {
+  color: #1a140c;
+  font-weight: 800;
+}
 .cat-tab--active::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 50%;
-  transform: translateX(-50%);
-  width: 40rpx; height: 4rpx;
-  background: #5B6EF5;
-  border-radius: 2rpx;
+  display: none;
 }
 
-/* 子分类 Tab */
+/* 子分类 Tab（非大咖团队长时） */
+.sub-scroll-wrap {
+  min-height: 112rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.06);
+  border: 1rpx solid #eceef8;
+  box-sizing: border-box;
+}
+
 .sub-scroll {
-  background: #fff;
+  background: transparent;
   white-space: nowrap;
-  padding: 12rpx 16rpx 16rpx;
-  border-bottom: 1rpx solid #ECEEF8;
 }
 .sub-tabs { display: inline-flex; gap: 16rpx; }
 .sub-tab {
@@ -123,6 +94,89 @@ page { background: #F0F2FA; }
   font-weight: 700;
 }
 
+/* 大咖团队长 · 横向游戏入口（参考设计稿） */
+.game-dock-card {
+  padding: 20rpx 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 28rpx rgba(15, 23, 42, 0.06);
+  border: 1rpx solid #eceef8;
+}
+
+.game-dock-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4rpx 16rpx;
+}
+
+.game-dock-title {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #1f2740;
+}
+
+.game-dock-arrow {
+  font-size: 36rpx;
+  color: #c5cad8;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.game-dock-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.game-dock-row {
+  display: inline-flex;
+  flex-direction: row;
+  gap: 20rpx;
+  padding: 4rpx 0;
+}
+
+.game-dock-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  width: 128rpx;
+  flex-shrink: 0;
+}
+
+.game-dock-thumb-wrap {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, #f6f7fb 0%, #eef1f8 100%);
+  border: 2rpx solid #e4e8f2;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.game-dock-item--active .game-dock-thumb-wrap {
+  border-color: #5b6ef5;
+  box-shadow: 0 0 0 3rpx rgba(91, 110, 245, 0.2);
+}
+
+.game-dock-thumb {
+  width: 100%;
+  height: 100%;
+}
+
+.game-dock-name {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #5f6881;
+  text-align: center;
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.game-dock-item--active .game-dock-name {
+  color: #5b6ef5;
+  font-weight: 700;
+}
+
 /* 空状态 */
 .empty-state {
   display: flex;
@@ -134,6 +188,38 @@ page { background: #F0F2FA; }
 .empty-icon { font-size: 80rpx; }
 .empty-title { font-size: 32rpx; font-weight: 700; color: #333; }
 .empty-desc { font-size: 26rpx; color: #999; }
+.empty-state--error .empty-title { color: #7c2d12; }
+.empty-state--error .empty-desc { color: #b45309; max-width: 560rpx; text-align: center; line-height: 1.7; }
+.empty-action {
+  margin-top: 10rpx;
+  min-width: 200rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #5B6EF5, #7B8EFF);
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+  box-shadow: 0 10rpx 22rpx rgba(91, 110, 245, 0.18);
+}
+
+.list-loading-mask {
+  margin: 20rpx 24rpx 0;
+  padding: 14rpx 20rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1rpx solid rgba(91, 110, 245, 0.12);
+  box-shadow: 0 10rpx 24rpx rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(10rpx);
+}
+
+.list-loading-text {
+  display: block;
+  font-size: 22rpx;
+  color: #64748b;
+  text-align: center;
+}
 
 /* 卡片列表 */
 .card-list {

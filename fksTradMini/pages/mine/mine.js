@@ -1,6 +1,11 @@
 const app = getApp()
 const { requestApi: sendRequest } = require('../../utils/request')
 const { ensureBeastId: ensureBeastIdGuard } = require('../../utils/user')
+const {
+  createPageLoadState,
+  toErrorState,
+  toSuccessState,
+} = require('../../utils/page-load-state')
 
 
 const DEFAULT_USER = {
@@ -51,6 +56,10 @@ function buildMineViewData(userInfo = {}) {
   }
 }
 
+function hasLocalProfileContent(userInfo = {}) {
+  return !!String(userInfo.nickName || '').trim() || !!String(userInfo.beastId || '').trim() || !!String(userInfo.account || '').trim()
+}
+
 
 Page({
 
@@ -58,20 +67,25 @@ Page({
     userInfo: {},
     gemBalance: 0,
     unreadCount: 0,
-    stats: { guaranteeTotal: 0, guaranteeDone: 0, recommendCount: 0, earnedGem: 0 }
+    stats: { guaranteeTotal: 0, guaranteeDone: 0, recommendCount: 0, earnedGem: 0 },
+    pageState: createPageLoadState('loading'),
   },
 
   onLoad() {
+    this._loadTs = 0
     this.loadData()
   },
 
   onShow() {
     const unreadCount = wx.getStorageSync('msg_unread_count')
     this.setData({ unreadCount: typeof unreadCount === 'number' ? unreadCount : 0 })
-    this.loadData()
+    if (Date.now() - (this._loadTs || 0) >= 1500) {
+      this.loadData()
+    }
   },
 
   loadData() {
+    this._loadTs = Date.now()
     const savedUser = normalizeUserInfo(wx.getStorageSync('userInfo') || {})
 
     sendRequest({
@@ -100,16 +114,26 @@ Page({
           guaranteeDone: Number(stats.guaranteeDone || 0),
           recommendCount: Number(stats.recommendCount || 0),
           earnedGem: Number(stats.earnedGem || 0)
-        }
+        },
+        pageState: toSuccessState(),
       })
     }).catch(() => {
       this.setData(Object.assign({
         userInfo: savedUser,
         gemBalance: 0,
-        stats: { guaranteeTotal: 0, guaranteeDone: 0, recommendCount: 0, earnedGem: 0 }
+        stats: { guaranteeTotal: 0, guaranteeDone: 0, recommendCount: 0, earnedGem: 0 },
+        pageState: toErrorState('个人页数据同步失败，请点击重试'),
       }, buildMineViewData(savedUser)))
 
+      if (hasLocalProfileContent(savedUser)) {
+        this.setData({ pageState: toErrorState('个人页数据同步失败，请点击重试') })
+      }
+
     })
+  },
+
+  retryLoadData() {
+    this.loadData()
   },
 
 

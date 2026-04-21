@@ -15,6 +15,14 @@
     </view>
   </view>
 
+  <view class="page-inline-state page-inline-state--error" wx:if="{{pageState.status === 'error'}}">
+    <view class="page-inline-copy">
+      <text class="page-inline-title">转出状态同步失败</text>
+      <text class="page-inline-desc">{{pageState.errorMessage}}</text>
+    </view>
+    <view class="page-inline-action" bindtap="retryLoadData">重新加载</view>
+  </view>
+
   <view class="bind-card" wx:if="{{!userInfo.beastId}}" bindtap="goProfile">
     <text class="bind-title">请先绑定方块兽ID</text>
     <text class="bind-desc">未绑定时无法发起转出申请，点击这里去个人设置补全信息。</text>

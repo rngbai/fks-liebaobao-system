@@ -37,6 +37,14 @@
     </swiper>
   </view>
 
+  <view class="page-inline-state page-inline-state--error" wx:if="{{pageState.status === 'error'}}">
+    <view class="page-inline-copy">
+      <text class="page-inline-title">连接有点不稳定</text>
+      <text class="page-inline-desc">{{pageState.errorMessage}}</text>
+    </view>
+    <view class="page-inline-action" bindtap="retryLoadHomeData">重新加载</view>
+  </view>
+
 
   <view class="pending-card" wx:if="{{pendingSummary.total > 0}}" bindtap="handlePendingTap">
     <view class="pending-card-head">

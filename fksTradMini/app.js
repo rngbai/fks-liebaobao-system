@@ -1,8 +1,12 @@
-// 生产环境地址（部署到服务器后改为 https://你的域名，微信小程序正式版必须 HTTPS）
-// 当前使用服务器 IP 直接访问（仅用于开发调试，正式上线前需绑定域名并申请 SSL）
-const DEFAULT_BASE_URL = 'http://124.223.80.102'
+const DEFAULT_BASE_URL = 'https://liebaobao.site'
 const API_BASE_URL_STORAGE = 'api_base_url'
 const USER_KEY_STORAGE = 'local_user_key_v1'
+
+const {
+  classifyRequestError,
+  extractErrorMessage,
+  shouldDisplayRequestToast,
+} = require('./utils/request-diagnostics')
 
 function generateLocalUserKey() {
   return `local_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
@@ -24,12 +28,29 @@ function isDevtoolsEnv() {
 function resolveStartupBaseUrl() {
   const storedBaseUrl = normalizeBaseUrl(wx.getStorageSync(API_BASE_URL_STORAGE))
   const runtimeBaseUrl = typeof globalThis !== 'undefined' ? normalizeBaseUrl(globalThis.__FKS_BASE_URL__) : ''
-  if (isDevtoolsEnv()) {
-    return runtimeBaseUrl || DEFAULT_BASE_URL
-  }
-  return storedBaseUrl || runtimeBaseUrl || DEFAULT_BASE_URL
-}
+  const fallback = normalizeBaseUrl(DEFAULT_BASE_URL)
 
+  if (isDevtoolsEnv()) {
+    return runtimeBaseUrl || fallback
+  }
+
+  const ipPattern = /^https?:\/\/\d{1,3}(?:\.\d{1,3}){3}/
+  if (storedBaseUrl && ipPattern.test(storedBaseUrl) && !/127\.0\.0\.1|localhost/i.test(storedBaseUrl)) {
+    try {
+      wx.removeStorageSync(API_BASE_URL_STORAGE)
+    } catch (error) {}
+    return fallback
+  }
+
+  if (fallback.startsWith('https://') && storedBaseUrl && storedBaseUrl.startsWith('http://')) {
+    try {
+      wx.removeStorageSync(API_BASE_URL_STORAGE)
+    } catch (error) {}
+    return fallback
+  }
+
+  return storedBaseUrl || runtimeBaseUrl || fallback
+}
 
 function buildRequestUrl(baseUrl, url) {
   const requestPath = String(url || '').trim()
@@ -45,47 +66,29 @@ function buildRequestUrl(baseUrl, url) {
   return requestPath.startsWith('/') ? `${baseUrl}${requestPath}` : `${baseUrl}/${requestPath}`
 }
 
-function extractErrorMessage(payload, fallbackText) {
-  if (typeof payload === 'string' && payload.trim()) {
-    return payload.trim()
-  }
-
-  if (payload && typeof payload.message === 'string' && payload.message.trim()) {
-    return payload.message.trim()
-  }
-
-  if (payload && typeof payload.msg === 'string' && payload.msg.trim()) {
-    return payload.msg.trim()
-  }
-
-  return fallbackText
-}
-
-function shouldRetryWithLocalBaseUrl(err) {
-  const errMsg = String((err && err.errMsg) || err || '').toLowerCase()
-  return errMsg.includes('timeout') || errMsg.includes('timed out') || errMsg.includes('connect') || errMsg.includes('refused') || errMsg.includes('fail')
-}
-
-
 App({
   globalData: {
     userInfo: null,
     openid: '',
     userKey: '',
     baseUrl: DEFAULT_BASE_URL,
-    loadingCount: 0
+    loadingCount: 0,
+    pendingCommunityRoute: null,
+    requestToastState: {},
   },
 
-
   onLaunch() {
-    this.globalData.baseUrl = resolveStartupBaseUrl()
-    wx.setStorageSync(API_BASE_URL_STORAGE, this.globalData.baseUrl)
+    const resolvedUrl = resolveStartupBaseUrl()
+    this.globalData.baseUrl = resolvedUrl
+    wx.setStorageSync(API_BASE_URL_STORAGE, resolvedUrl)
+    console.log('[FKS] baseUrl resolved:', resolvedUrl)
+
     this.globalData.userKey = this.ensureUserKey()
     this.globalData.userInfo = wx.getStorageSync('userInfo') || null
 
     wx.login({
       success: () => {},
-      fail: () => {}
+      fail: () => {},
     })
   },
 
@@ -127,7 +130,7 @@ App({
   getRequestHeader(extraHeader = {}) {
     const header = {
       'content-type': 'application/json',
-      'x-user-key': this.getUserKey()
+      'x-user-key': this.getUserKey(),
     }
 
     if (this.globalData.openid) {
@@ -136,7 +139,7 @@ App({
 
     return {
       ...header,
-      ...extraHeader
+      ...extraHeader,
     }
   },
 
@@ -161,7 +164,6 @@ App({
   },
 
   request(options = {}) {
-
     const {
       url,
       method = 'GET',
@@ -173,16 +175,21 @@ App({
       showLoading = true,
       loadingText = '加载中...',
       showError = true,
-      timeout = 10000
+      timeout = 15000,
+      retry,
     } = options
 
+    const maxRetry = retry !== undefined
+      ? Math.max(0, Number(retry))
+      : (/^get$/i.test(method) ? 2 : 0)
+
     const requestUrl = buildRequestUrl(this.getBaseUrl(), url)
+
     if (showLoading) {
       this.showGlobalLoading(loadingText)
     }
 
-
-    return new Promise((resolve, reject) => {
+    const doOnce = () => new Promise((resolve, reject) => {
       wx.request({
         url: requestUrl,
         method,
@@ -191,42 +198,62 @@ App({
         header: this.getRequestHeader(header),
         success: res => {
           const payload = res.data || {}
-
           if (res.statusCode !== 200) {
-            const errorMessage = extractErrorMessage(payload, '请求失败')
-            showError && wx.showToast({ title: errorMessage, icon: 'none' })
-            fail && fail(payload)
-            reject({ ...payload, message: errorMessage, statusCode: res.statusCode })
-            return
+            reject({ ...payload, message: extractErrorMessage(payload, '请求失败'), statusCode: res.statusCode })
+          } else if (payload.ok === false) {
+            reject({ ...payload, message: extractErrorMessage(payload, '请求失败') })
+          } else {
+            resolve(payload)
           }
-
-          if (payload.ok === false) {
-            const errorMessage = extractErrorMessage(payload, '请求失败')
-            showError && wx.showToast({ title: errorMessage, icon: 'none' })
-            fail && fail(payload)
-            reject({ ...payload, message: errorMessage })
-            return
-          }
-
-          success && success(payload)
-          resolve(payload)
         },
         fail: err => {
-          const errorMessage = extractErrorMessage(err, '网络异常')
-          showError && wx.showToast({ title: errorMessage, icon: 'none' })
-          fail && fail(err)
-          reject({ ...err, message: errorMessage })
+          reject({ ...(err || {}), _network: true })
         },
-        complete: res => {
-          if (showLoading) {
-            this.hideGlobalLoading()
-          }
-
-          complete && complete(res)
-        }
-
       })
     })
-  }
-})
 
+    const attempt = (attemptIndex) => doOnce().catch(err => {
+      if (err._network && attemptIndex < maxRetry) {
+        return new Promise(resolve => setTimeout(resolve, 800 * (attemptIndex + 1)))
+          .then(() => attempt(attemptIndex + 1))
+      }
+      return Promise.reject(err)
+    })
+
+    return attempt(0).then(
+      payload => {
+        if (showLoading) this.hideGlobalLoading()
+        complete && complete()
+        success && success(payload)
+        return payload
+      },
+      err => {
+        if (showLoading) this.hideGlobalLoading()
+        complete && complete()
+
+        const diagnosis = classifyRequestError(err, requestUrl)
+        const errorMessage = diagnosis.message
+
+        console.warn('[FKS] request error:', {
+          url: requestUrl,
+          method,
+          errMsg: diagnosis.rawMessage,
+          message: errorMessage,
+          code: diagnosis.code,
+          baseUrl: this.getBaseUrl(),
+        })
+
+        if (showError && shouldDisplayRequestToast(this.globalData.requestToastState, diagnosis)) {
+          wx.showToast({
+            title: errorMessage,
+            icon: 'none',
+            duration: diagnosis.duration,
+          })
+        }
+
+        fail && fail(err)
+        return Promise.reject({ ...err, message: errorMessage, errorCode: diagnosis.code })
+      }
+    )
+  },
+})

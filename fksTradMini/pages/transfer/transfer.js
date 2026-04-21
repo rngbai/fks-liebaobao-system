@@ -1,5 +1,10 @@
 const { requestApi: sendRequest } = require('../../utils/request')
 const { ensureBeastId: ensureBeastIdGuard } = require('../../utils/user')
+const {
+  createPageLoadState,
+  toErrorState,
+  toSuccessState,
+} = require('../../utils/page-load-state')
 
 
 Page({
@@ -17,15 +22,19 @@ Page({
     todayCount: 0,
     canCreate: false,
     pendingRequest: null,
-    history: []
+    history: [],
+    pageState: createPageLoadState('loading')
   },
 
   onLoad() {
+    this._loadTs = 0
     this.loadData()
   },
 
   onShow() {
-    this.loadData(true)
+    if (Date.now() - (this._loadTs || 0) >= 1500) {
+      this.loadData(true)
+    }
   },
 
   requestApi(options) {
@@ -36,6 +45,7 @@ Page({
 
 
   loadData(silent = false) {
+    this._loadTs = Date.now()
     this.requestApi({
       url: '/api/transfer/state?limit=20',
       showLoading: !silent,
@@ -43,9 +53,7 @@ Page({
     }).then(payload => {
       this.applyState(payload.data || {})
     }).catch(error => {
-      if (!silent) {
-        wx.showToast({ title: error.message || error || '读取转出状态失败', icon: 'none' })
-      }
+      this.setData({ pageState: toErrorState(error.message || error || '??????????????') })
     })
   },
 
@@ -63,9 +71,14 @@ Page({
       todayCount: Number(transfer.todayCount || 0),
       canCreate: !!transfer.canCreate,
       pendingRequest: transfer.pendingRequest || null,
-      history: Array.isArray(transfer.history) ? transfer.history : []
+      history: Array.isArray(transfer.history) ? transfer.history : [],
+      pageState: toSuccessState()
     })
     this.syncAmountMeta(this.data.amount)
+  },
+
+  retryLoadData() {
+    this.loadData(false)
   },
 
   calculateFee(amount) {

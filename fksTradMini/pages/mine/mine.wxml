@@ -34,6 +34,14 @@
     </view>
   </view>
 
+  <view class="page-inline-state page-inline-state--error" wx:if="{{pageState.status === 'error'}}">
+    <view class="page-inline-copy">
+      <text class="page-inline-title">数据同步有点慢</text>
+      <text class="page-inline-desc">{{pageState.errorMessage}}</text>
+    </view>
+    <view class="page-inline-action" bindtap="retryLoadData">重新加载</view>
+  </view>
+
   <view class="stats-row">
     <view class="stat-item" bindtap="goGuaranteeRecords">
       <text class="stat-num">{{stats.guaranteeTotal}}</text>

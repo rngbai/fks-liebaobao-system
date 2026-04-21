@@ -12,6 +12,52 @@
   justify-content: space-between;
 }
 
+.page-inline-state {
+  margin: 20rpx 24rpx 0;
+  padding: 22rpx 24rpx;
+  border-radius: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  background: linear-gradient(135deg, #fff7ed, #fffbeb);
+  border: 1rpx solid rgba(217, 119, 6, 0.18);
+  box-shadow: 0 12rpx 24rpx rgba(217, 119, 6, 0.08);
+}
+
+.page-inline-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-inline-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #9a3412;
+}
+
+.page-inline-desc {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #b45309;
+}
+
+.page-inline-action {
+  flex-shrink: 0;
+  min-width: 148rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: linear-gradient(135deg, #5B6EF5, #7c3aed);
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
 .bal-label {
   display: block;
   font-size: 24rpx;
