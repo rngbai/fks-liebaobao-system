@@ -6,6 +6,8 @@ const DEFAULT_FORM = {
   nickName: '',
   account: '',
   phone: '',
+  liebaobaoId: '',
+  liebaobaoId: '',
   email: '',
   beastId: ''
 }
@@ -18,6 +20,8 @@ function normalizeProfileForm(form = {}) {
     nickName: String(form.nickName || '').trim(),
     account: String(form.account || '').trim(),
     phone: String(form.phone || '').trim(),
+    liebaobaoId: String(form.liebaobaoId || '').trim(),
+    liebaobaoId: String(form.liebaobaoId || '').trim(),
     email: String(form.email || '').trim(),
     beastId: String(form.beastId || '').trim()
   }
@@ -62,7 +66,7 @@ Page({
   changePassword() {
     wx.showModal({
       title: '修改密码',
-      content: '密码修改功能需要绑定手机号验证，请在绑定手机号后使用',
+      content: '密码修改功能后续会接入新的身份校验方式，当前版本暂未开放。',
       showCancel: false,
       confirmText: '知道了'
     })

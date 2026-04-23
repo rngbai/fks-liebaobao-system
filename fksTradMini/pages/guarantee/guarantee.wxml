@@ -1,6 +1,18 @@
 <!-- 担保中心 -->
 <view class="container">
 
+<view class="silent-refresh-bar" wx:if="{{silentRefreshing}}">
+  <text class="silent-refresh-text">正在后台更新数据...</text>
+</view>
+
+<view class="page-inline-state page-inline-state--error" wx:elif="{{loadError}}">
+  <view class="page-inline-copy">
+    <text class="page-inline-title">担保数据加载失败</text>
+    <text class="page-inline-desc">当前网络有点不稳定，点击重新加载后再试一次。</text>
+  </view>
+  <view class="page-inline-action" bindtap="retryLoad">重新加载</view>
+</view>
+
   <view class="gem-balance-card">
     <view class="gem-balance-left">
       <text class="gem-balance-label">我的宝石余额</text>
@@ -195,7 +207,7 @@
     </view>
     <view class="rule-item">
       <text class="rule-dot">•</text>
-      <text class="rule-text">担保采用 <text class="rule-highlight">买卖双方各扣 1 宝石</text> 的手续费规则；例如挂单 100 宝石时，卖家发布先扣 101，买家到账再扣 1，最终实收 99。</text>
+      <text class="rule-text">担保采用 <text class="rule-highlight">买卖双方各扣 0.5 宝石</text> 的手续费规则；例如挂单 100 宝石时，卖家发布先扣 100.5，买家到账再扣 0.5，最终实收 99.5。</text>
 
     </view>
   </view>

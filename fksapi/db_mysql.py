@@ -12,28 +12,72 @@ DB_PORT = int(os.environ.get('MYSQL_PORT', '3306'))
 DB_USER = os.environ.get('MYSQL_USER', 'fks_user')
 DB_PASSWORD = os.environ.get('MYSQL_PASSWORD', '')
 DB_NAME = os.environ.get('MYSQL_DATABASE', 'fks_trade')
+
+# ---------- 连接池（dbutils.PooledDB）----------
+# mincached: 启动时保持的空闲连接数
+# maxcached: 允许最多空闲的连接数
+# maxconnections: 总连接上限（0=无限制）
+# blocking: 超出上限时是否阻塞等待（True=等，False=抛异常）
+try:
+    from dbutils.pooled_db import PooledDB as _PooledDB
+    _DB_POOL = _PooledDB(
+        creator=pymysql,
+        mincached=2,
+        maxcached=8,
+        maxconnections=20,
+        blocking=True,
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME,
+        charset='utf8mb4',
+        cursorclass=DictCursor,
+        autocommit=True,
+        connect_timeout=10,
+    )
+    _DB_POOL_NO_DB = _PooledDB(
+        creator=pymysql,
+        mincached=1,
+        maxcached=2,
+        maxconnections=5,
+        blocking=True,
+        host=DB_HOST,
+        port=DB_PORT,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        charset='utf8mb4',
+        cursorclass=DictCursor,
+        autocommit=True,
+        connect_timeout=10,
+    )
+    _POOL_AVAILABLE = True
+except Exception:
+    _DB_POOL = None
+    _DB_POOL_NO_DB = None
+    _POOL_AVAILABLE = False
+# -----------------------------------------------
 DEFAULT_GEM_BALANCE = 256
+GEM_SCALE = 10
 DEFAULT_CANCEL_LIMIT = 5
 DEFAULT_GUARANTEE_FEE = 1
+DEFAULT_GUARANTEE_FEE_X10 = 5
 DEFAULT_TRANSFER_OUT_DAILY_LIMIT = 10
 DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS = 50
 DEFAULT_FEEDBACK_DAILY_LIMIT = 3
 DEFAULT_COMMUNITY_APPLY_DAILY_LIMIT = 2
 FEEDBACK_TYPE_COMMUNITY_APPLY = '社区认证申请'
 FEEDBACK_SCENE_COMMUNITY_APPLY = 'community_apply'
+FEEDBACK_SCENE_ADMIN_LAYOUT = 'admin_layout'
 FEEDBACK_TYPE_DAILY_LIMITS = {
     FEEDBACK_TYPE_COMMUNITY_APPLY: DEFAULT_COMMUNITY_APPLY_DAILY_LIMIT,
 }
-# 2级分销：每单双方各扣1宝石，拿出50%做推广激励（共1宝石/单）
-
-PROMO_COMMISSION_L1_X10 = 8    # 一级分佣 0.8 宝石 (×10 存储)
-PROMO_COMMISSION_L2_X10 = 2    # 二级分佣 0.2 宝石 (×10 存储)
-PROMO_FIRST_ORDER_BONUS = 2    # 新人首单奖励 2 宝石（整数）
-PROMO_TIER_RULES = [
-    {'min_orders': 100, 'extra_x10': 3},   # ≥100单/月额外 +0.3/单
-    {'min_orders': 30,  'extra_x10': 2},   # ≥30单/月额外 +0.2/单
-]
-PROMO_TOP5_REWARDS = [50, 30, 20, 10, 5]  # 月度Top5奖励（宝石）
+# 永久分佣：担保交易完成后秒到账
+PROMO_COMMISSION_L1_X10 = 3    # 直推每单 0.3 宝石
+PROMO_COMMISSION_L2_X10 = 2    # 间推每单 0.2 宝石
+PROMO_FIRST_ORDER_BONUS = 0    # 停用旧首单奖励
+PROMO_TIER_RULES = []          # 停用月阶梯奖励
+PROMO_TOP5_REWARDS = []        # 停用月度 Top5 奖励
 HOME_CONTENT_CONFIG_KEY = 'home_content'
 GAME_CREDENTIALS_CONFIG_KEY = 'game_credentials'
 HOME_ACTION_TYPES = {'group', 'navigate', 'switchTab', 'none'}
@@ -185,15 +229,19 @@ GUARANTEE_STATUS_PENDING = 'pending'
 GUARANTEE_STATUS_MATCHED = 'matched'
 GUARANTEE_STATUS_DONE = 'done'
 GUARANTEE_STATUS_APPEAL = 'appeal'
+GUARANTEE_STATUS_CLOSED = 'closed'
 GUARANTEE_AUTO_CONFIRM_HOURS = 2
+GUARANTEE_AUTO_CLOSE_MINUTES = 30   # 无人匹配30分钟后自动关闭，宝石退还卖家
+GUARANTEE_MATCH_ABANDON_MINUTES = 10  # 已匹配但一直未上传交易截图，超时后关单退还卖家
+GUARANTEE_MATCH_ABANDON_HOURS = GUARANTEE_MATCH_ABANDON_MINUTES / 60  # 兼容引用
 
 GUARANTEE_STATUS_META = {
 
     GUARANTEE_STATUS_PENDING: {
         'index': 0,
-        'text': '等待买家比配',
+        'text': '等待买家匹配',
         'short_text': '等待中',
-        'desc': '等待买家提交方块兽 ID、昵称与交易说明',
+        'desc': '等待买家查询保单并确认匹配',
         'class': 'pending',
     },
     GUARANTEE_STATUS_MATCHED: {
@@ -217,6 +265,13 @@ GUARANTEE_STATUS_META = {
         'short_text': '申诉中',
         'desc': '订单申诉处理中',
         'class': 'appeal',
+    },
+    GUARANTEE_STATUS_CLOSED: {
+        'index': 4,
+        'text': '已关闭',
+        'short_text': '已关闭',
+        'desc': '保单已关闭，锁定宝石已退还卖家账户',
+        'class': 'closed',
     },
 }
 
@@ -257,10 +312,15 @@ SCHEMA_STATEMENTS = [
     CREATE TABLE IF NOT EXISTS user_wallets (
         user_id BIGINT PRIMARY KEY,
         gem_balance INT NOT NULL DEFAULT {DEFAULT_GEM_BALANCE},
+        gem_balance_x10 INT NOT NULL DEFAULT {DEFAULT_GEM_BALANCE * GEM_SCALE},
         locked_gems INT NOT NULL DEFAULT 0,
+        locked_gems_x10 INT NOT NULL DEFAULT 0,
         total_recharged INT NOT NULL DEFAULT 0,
+        total_recharged_x10 INT NOT NULL DEFAULT 0,
         total_spent INT NOT NULL DEFAULT 0,
+        total_spent_x10 INT NOT NULL DEFAULT 0,
         total_earned INT NOT NULL DEFAULT 0,
+        total_earned_x10 INT NOT NULL DEFAULT 0,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_updated_at (updated_at)
@@ -272,8 +332,11 @@ SCHEMA_STATEMENTS = [
         user_id BIGINT NOT NULL,
         biz_type VARCHAR(32) NOT NULL,
         change_amount INT NOT NULL,
+        change_amount_x10 INT NOT NULL DEFAULT 0,
         balance_before INT NOT NULL,
+        balance_before_x10 INT NOT NULL DEFAULT 0,
         balance_after INT NOT NULL,
+        balance_after_x10 INT NOT NULL DEFAULT 0,
         ref_type VARCHAR(32) NOT NULL DEFAULT '',
         ref_id VARCHAR(64) NOT NULL DEFAULT '',
         remark VARCHAR(255) NOT NULL DEFAULT '',
@@ -321,8 +384,10 @@ SCHEMA_STATEMENTS = [
         buyer_proof_image VARCHAR(255) NOT NULL DEFAULT '',
         buyer_proof_uploaded_at DATETIME DEFAULT NULL,
         gem_amount INT NOT NULL,
+        market_price INT NOT NULL DEFAULT 0,
 
         fee_amount INT NOT NULL DEFAULT {DEFAULT_GUARANTEE_FEE},
+        fee_amount_x10 INT NOT NULL DEFAULT {DEFAULT_GUARANTEE_FEE_X10},
         remark VARCHAR(255) NOT NULL DEFAULT '',
         admin_note VARCHAR(255) NOT NULL DEFAULT '',
         status VARCHAR(16) NOT NULL DEFAULT 'pending',
@@ -344,8 +409,11 @@ SCHEMA_STATEMENTS = [
         beast_id VARCHAR(32) NOT NULL DEFAULT '',
         beast_nick VARCHAR(64) NOT NULL DEFAULT '',
         request_amount INT NOT NULL,
+        request_amount_x10 INT NOT NULL DEFAULT 0,
         fee_amount INT NOT NULL DEFAULT 0,
+        fee_amount_x10 INT NOT NULL DEFAULT 0,
         actual_amount INT NOT NULL DEFAULT 0,
+        actual_amount_x10 INT NOT NULL DEFAULT 0,
         fee_basis_points INT NOT NULL DEFAULT {DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS},
         status VARCHAR(16) NOT NULL DEFAULT 'pending',
         user_note VARCHAR(255) NOT NULL DEFAULT '',
@@ -649,25 +717,65 @@ def build_home_content_summary(content, updated_at=''):
     }
 
 
-@contextmanager
+def to_x10_amount(value):
+    return int(round(float(value or 0) * GEM_SCALE))
 
+
+def x10_to_amount(value_x10):
+    value_x10 = int(value_x10 or 0)
+    if value_x10 % GEM_SCALE == 0:
+        return value_x10 // GEM_SCALE
+    return round(value_x10 / GEM_SCALE, 1)
+
+
+def get_row_amount_x10(row, field_name):
+    row = row or {}
+    x10_key = f'{field_name}_x10'
+    if x10_key in row and row.get(x10_key) is not None:
+        return int(row.get(x10_key) or 0)
+    return to_x10_amount(row.get(field_name) or 0)
+
+
+def sync_legacy_int_amount(amount_x10):
+    amount_x10 = int(amount_x10 or 0)
+    if amount_x10 < 0:
+        return -((-amount_x10) // GEM_SCALE)
+    return amount_x10 // GEM_SCALE
+
+
+@contextmanager
 def get_connection(use_database=True, autocommit=True):
-    config = {
-        'host': DB_HOST,
-        'port': DB_PORT,
-        'user': DB_USER,
-        'password': DB_PASSWORD,
-        'charset': 'utf8mb4',
-        'cursorclass': DictCursor,
-        'autocommit': autocommit,
-    }
-    if use_database:
-        config['database'] = DB_NAME
-    conn = pymysql.connect(**config)
-    try:
-        yield conn
-    finally:
-        conn.close()
+    """获取数据库连接。
+    autocommit=True（默认）：从连接池复用，适合普通读写。
+    autocommit=False：新建直连，由调用方手动 commit/rollback，适合事务。
+    """
+    if _POOL_AVAILABLE and autocommit:
+        # 连接池路径：autocommit=True 的读写请求
+        pool = _DB_POOL if use_database else _DB_POOL_NO_DB
+        conn = pool.connection()
+        try:
+            yield conn
+        finally:
+            conn.close()  # 归还到池，不是真正关闭
+    else:
+        # 直连路径：事务请求（autocommit=False）或池不可用时
+        config = {
+            'host': DB_HOST,
+            'port': DB_PORT,
+            'user': DB_USER,
+            'password': DB_PASSWORD,
+            'charset': 'utf8mb4',
+            'cursorclass': DictCursor,
+            'autocommit': autocommit,
+            'connect_timeout': 10,
+        }
+        if use_database:
+            config['database'] = DB_NAME
+        conn = pymysql.connect(**config)
+        try:
+            yield conn
+        finally:
+            conn.close()
 
 
 def column_exists(conn, table_name, column_name):
@@ -718,6 +826,10 @@ def ensure_schema_upgrades(conn):
         upgrade_statements.append(
             "ALTER TABLE guarantee_orders ADD COLUMN seller_confirmed_at DATETIME DEFAULT NULL AFTER matched_at"
         )
+    if not column_exists(conn, 'guarantee_orders', 'market_price'):
+        upgrade_statements.append(
+            "ALTER TABLE guarantee_orders ADD COLUMN market_price INT NOT NULL DEFAULT 0 AFTER gem_amount"
+        )
     if not column_exists(conn, 'users', 'invite_code'):
         upgrade_statements.append(
             "ALTER TABLE users ADD COLUMN invite_code VARCHAR(16) NOT NULL DEFAULT '' AFTER status"
@@ -737,6 +849,54 @@ def ensure_schema_upgrades(conn):
     if not column_exists(conn, 'user_wallets', 'commission_pending_x10'):
         upgrade_statements.append(
             "ALTER TABLE user_wallets ADD COLUMN commission_pending_x10 INT NOT NULL DEFAULT 0 COMMENT '待发放佣金×10'"
+        )
+    if not column_exists(conn, 'user_wallets', 'gem_balance_x10'):
+        upgrade_statements.append(
+            f"ALTER TABLE user_wallets ADD COLUMN gem_balance_x10 INT NOT NULL DEFAULT {DEFAULT_GEM_BALANCE * GEM_SCALE} AFTER gem_balance"
+        )
+    if not column_exists(conn, 'user_wallets', 'locked_gems_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE user_wallets ADD COLUMN locked_gems_x10 INT NOT NULL DEFAULT 0 AFTER locked_gems"
+        )
+    if not column_exists(conn, 'user_wallets', 'total_recharged_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE user_wallets ADD COLUMN total_recharged_x10 INT NOT NULL DEFAULT 0 AFTER total_recharged"
+        )
+    if not column_exists(conn, 'user_wallets', 'total_spent_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE user_wallets ADD COLUMN total_spent_x10 INT NOT NULL DEFAULT 0 AFTER total_spent"
+        )
+    if not column_exists(conn, 'user_wallets', 'total_earned_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE user_wallets ADD COLUMN total_earned_x10 INT NOT NULL DEFAULT 0 AFTER total_earned"
+        )
+    if not column_exists(conn, 'wallet_transactions', 'change_amount_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE wallet_transactions ADD COLUMN change_amount_x10 INT NOT NULL DEFAULT 0 AFTER change_amount"
+        )
+    if not column_exists(conn, 'wallet_transactions', 'balance_before_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE wallet_transactions ADD COLUMN balance_before_x10 INT NOT NULL DEFAULT 0 AFTER balance_before"
+        )
+    if not column_exists(conn, 'wallet_transactions', 'balance_after_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE wallet_transactions ADD COLUMN balance_after_x10 INT NOT NULL DEFAULT 0 AFTER balance_after"
+        )
+    if not column_exists(conn, 'guarantee_orders', 'fee_amount_x10'):
+        upgrade_statements.append(
+            f"ALTER TABLE guarantee_orders ADD COLUMN fee_amount_x10 INT NOT NULL DEFAULT {DEFAULT_GUARANTEE_FEE_X10} AFTER fee_amount"
+        )
+    if not column_exists(conn, 'gem_transfer_requests', 'request_amount_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE gem_transfer_requests ADD COLUMN request_amount_x10 INT NOT NULL DEFAULT 0 AFTER request_amount"
+        )
+    if not column_exists(conn, 'gem_transfer_requests', 'fee_amount_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE gem_transfer_requests ADD COLUMN fee_amount_x10 INT NOT NULL DEFAULT 0 AFTER fee_amount"
+        )
+    if not column_exists(conn, 'gem_transfer_requests', 'actual_amount_x10'):
+        upgrade_statements.append(
+            "ALTER TABLE gem_transfer_requests ADD COLUMN actual_amount_x10 INT NOT NULL DEFAULT 0 AFTER actual_amount"
         )
     # 兼容旧库：反馈表早期版本没有 scene/社区申请相关字段
     if not column_exists(conn, 'user_feedback', 'scene'):
@@ -770,6 +930,38 @@ def ensure_schema_upgrades(conn):
     with conn.cursor() as cursor:
         for statement in upgrade_statements:
             cursor.execute(statement)
+        cursor.execute(
+            '''
+            UPDATE user_wallets
+            SET gem_balance_x10=CASE WHEN gem_balance_x10=0 AND gem_balance<>0 THEN gem_balance*10 ELSE gem_balance_x10 END,
+                locked_gems_x10=CASE WHEN locked_gems_x10=0 AND locked_gems<>0 THEN locked_gems*10 ELSE locked_gems_x10 END,
+                total_recharged_x10=CASE WHEN total_recharged_x10=0 AND total_recharged<>0 THEN total_recharged*10 ELSE total_recharged_x10 END,
+                total_spent_x10=CASE WHEN total_spent_x10=0 AND total_spent<>0 THEN total_spent*10 ELSE total_spent_x10 END,
+                total_earned_x10=CASE WHEN total_earned_x10=0 AND total_earned<>0 THEN total_earned*10 ELSE total_earned_x10 END
+            '''
+        )
+        cursor.execute(
+            '''
+            UPDATE wallet_transactions
+            SET change_amount_x10=CASE WHEN change_amount_x10=0 AND change_amount<>0 THEN change_amount*10 ELSE change_amount_x10 END,
+                balance_before_x10=CASE WHEN balance_before_x10=0 AND balance_before<>0 THEN balance_before*10 ELSE balance_before_x10 END,
+                balance_after_x10=CASE WHEN balance_after_x10=0 AND balance_after<>0 THEN balance_after*10 ELSE balance_after_x10 END
+            '''
+        )
+        cursor.execute(
+            '''
+            UPDATE guarantee_orders
+            SET fee_amount_x10=CASE WHEN fee_amount_x10=0 AND fee_amount<>0 THEN fee_amount*10 ELSE fee_amount_x10 END
+            '''
+        )
+        cursor.execute(
+            '''
+            UPDATE gem_transfer_requests
+            SET request_amount_x10=CASE WHEN request_amount_x10=0 AND request_amount<>0 THEN request_amount*10 ELSE request_amount_x10 END,
+                fee_amount_x10=CASE WHEN fee_amount_x10=0 AND fee_amount<>0 THEN fee_amount*10 ELSE fee_amount_x10 END,
+                actual_amount_x10=CASE WHEN actual_amount_x10=0 AND actual_amount<>0 THEN actual_amount*10 ELSE actual_amount_x10 END
+            '''
+        )
 
 
 def init_database_and_tables():
@@ -895,6 +1087,17 @@ def normalize_beast_id_value(beast_id):
     return '' if is_placeholder_beast_id(value) else value
 
 
+def build_liebaobao_id(user_row):
+    user_row = user_row or {}
+    user_id = int(user_row.get('id') or 0)
+    if user_id > 0:
+        return f"LBB{user_id:06d}"
+    user_key = str(user_row.get('user_key') or '').strip()
+    if user_key:
+        return f"LBB-{user_key[-8:].upper()}"
+    return ''
+
+
 
 def serialize_user(user_row):
     return {
@@ -904,6 +1107,7 @@ def serialize_user(user_row):
         'account': user_row.get('account') or '',
         'beastId': normalize_beast_id_value(user_row.get('beast_id')),
         'phone': user_row.get('phone') or '',
+        'liebaobaoId': build_liebaobao_id(user_row),
         'email': user_row.get('email') or '',
         'inviteCode': user_row.get('invite_code') or '',
         'invitedByUserId': int(user_row.get('invited_by_user_id') or 0),
@@ -915,23 +1119,63 @@ def serialize_user(user_row):
 
 
 def serialize_wallet(wallet_row):
+    gem_balance_x10 = get_row_amount_x10(wallet_row, 'gem_balance')
+    locked_gems_x10 = get_row_amount_x10(wallet_row, 'locked_gems')
+    total_recharged_x10 = get_row_amount_x10(wallet_row, 'total_recharged')
+    total_spent_x10 = get_row_amount_x10(wallet_row, 'total_spent')
+    total_earned_x10 = get_row_amount_x10(wallet_row, 'total_earned')
     return {
-        'gemBalance': int(wallet_row.get('gem_balance') or 0),
-        'lockedGems': int(wallet_row.get('locked_gems') or 0),
-        'totalRecharged': int(wallet_row.get('total_recharged') or 0),
-        'totalSpent': int(wallet_row.get('total_spent') or 0),
-        'totalEarned': int(wallet_row.get('total_earned') or 0),
+        'gemBalance': x10_to_amount(gem_balance_x10),
+        'gemBalanceX10': gem_balance_x10,
+        'lockedGems': x10_to_amount(locked_gems_x10),
+        'lockedGemsX10': locked_gems_x10,
+        'totalRecharged': x10_to_amount(total_recharged_x10),
+        'totalSpent': x10_to_amount(total_spent_x10),
+        'totalEarned': x10_to_amount(total_earned_x10),
     }
 
 
-def insert_wallet_transaction(conn, user_id, biz_type, change_amount, balance_before, balance_after, ref_type='', ref_id='', remark=''):
+def insert_wallet_transaction(
+    conn,
+    user_id,
+    biz_type,
+    change_amount,
+    balance_before,
+    balance_after,
+    ref_type='',
+    ref_id='',
+    remark='',
+    change_amount_x10=None,
+    balance_before_x10=None,
+    balance_after_x10=None,
+):
+    change_amount_x10 = int(change_amount_x10 if change_amount_x10 is not None else to_x10_amount(change_amount))
+    balance_before_x10 = int(balance_before_x10 if balance_before_x10 is not None else to_x10_amount(balance_before))
+    balance_after_x10 = int(balance_after_x10 if balance_after_x10 is not None else to_x10_amount(balance_after))
     with conn.cursor() as cursor:
         cursor.execute(
             '''
-            INSERT INTO wallet_transactions (user_id, biz_type, change_amount, balance_before, balance_after, ref_type, ref_id, remark)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO wallet_transactions (
+                user_id, biz_type, change_amount, change_amount_x10,
+                balance_before, balance_before_x10,
+                balance_after, balance_after_x10,
+                ref_type, ref_id, remark
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''',
-            (user_id, biz_type, int(change_amount), int(balance_before), int(balance_after), ref_type, ref_id, remark[:255])
+            (
+                user_id,
+                biz_type,
+                sync_legacy_int_amount(change_amount_x10),
+                change_amount_x10,
+                sync_legacy_int_amount(balance_before_x10),
+                balance_before_x10,
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                ref_type,
+                ref_id,
+                remark[:255],
+            )
         )
         return int(cursor.lastrowid)
 
@@ -1265,14 +1509,15 @@ def create_feedback(conn, user_row, feedback_type, title, content, contact='', s
 
     type_daily_limit = get_feedback_daily_limit(feedback_type)
     type_today_count = count_today_feedbacks(conn, user_row['id'], feedback_type=feedback_type)
-    if type_today_count >= type_daily_limit:
-        if feedback_type == FEEDBACK_TYPE_COMMUNITY_APPLY:
-            raise ValueError(f'社区名流认证申请每天最多提交 {type_daily_limit} 次，请明天再试')
-        raise ValueError(f'该类型反馈每天最多提交 {type_daily_limit} 次，请明天再试')
+    if normalized_scene != FEEDBACK_SCENE_ADMIN_LAYOUT:
+        if type_today_count >= type_daily_limit:
+            if feedback_type == FEEDBACK_TYPE_COMMUNITY_APPLY:
+                raise ValueError(f'社区名流认证申请每天最多提交 {type_daily_limit} 次，请明天再试')
+            raise ValueError(f'该类型反馈每天最多提交 {type_daily_limit} 次，请明天再试')
 
-    today_count = count_today_feedbacks(conn, user_row['id'])
-    if today_count >= DEFAULT_FEEDBACK_DAILY_LIMIT:
-        raise ValueError(f'每天最多提交 {DEFAULT_FEEDBACK_DAILY_LIMIT} 次反馈，请明天再试')
+        today_count = count_today_feedbacks(conn, user_row['id'])
+        if today_count >= DEFAULT_FEEDBACK_DAILY_LIMIT:
+            raise ValueError(f'每天最多提交 {DEFAULT_FEEDBACK_DAILY_LIMIT} 次反馈，请明天再试')
 
     with conn.cursor() as cursor:
 
@@ -1441,6 +1686,12 @@ def calculate_transfer_out_fee(amount):
     return max(0, amount * DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS // 10000)
 
 
+def calculate_guarantee_seller_total_cost_x10(gem_amount, fee_amount_x10=DEFAULT_GUARANTEE_FEE_X10):
+    gem_amount_x10 = to_x10_amount(max(0, int(gem_amount or 0)))
+    fee_amount_x10 = max(0, int(fee_amount_x10 or 0))
+    return gem_amount_x10 + fee_amount_x10
+
+
 
 def calculate_guarantee_seller_total_cost(gem_amount, fee_amount=DEFAULT_GUARANTEE_FEE):
     gem_amount = max(0, int(gem_amount or 0))
@@ -1448,11 +1699,22 @@ def calculate_guarantee_seller_total_cost(gem_amount, fee_amount=DEFAULT_GUARANT
     return gem_amount + fee_amount
 
 
+def calculate_guarantee_actual_receive_x10(gem_amount, fee_amount_x10=DEFAULT_GUARANTEE_FEE_X10):
+    gem_amount_x10 = to_x10_amount(max(0, int(gem_amount or 0)))
+    fee_amount_x10 = max(0, int(fee_amount_x10 or 0))
+    return max(gem_amount_x10 - fee_amount_x10, 0)
+
+
 
 def calculate_guarantee_actual_receive(gem_amount, fee_amount=DEFAULT_GUARANTEE_FEE):
     gem_amount = max(0, int(gem_amount or 0))
     fee_amount = max(0, int(fee_amount or 0))
     return max(gem_amount - fee_amount, 0)
+
+
+def calculate_guarantee_total_fee_x10(fee_amount_x10=DEFAULT_GUARANTEE_FEE_X10):
+    fee_amount_x10 = max(0, int(fee_amount_x10 or 0))
+    return fee_amount_x10 * 2
 
 
 
@@ -1467,17 +1729,20 @@ def serialize_transfer_request(row):
     if not row:
         return None
     meta = get_transfer_request_meta(row.get('status'))
-    request_amount = int(row.get('request_amount') or 0)
-    fee_amount = int(row.get('fee_amount') or 0)
-    actual_amount = int(row.get('actual_amount') or max(request_amount - fee_amount, 0))
+    request_amount_x10 = get_row_amount_x10(row, 'request_amount')
+    fee_amount_x10 = get_row_amount_x10(row, 'fee_amount')
+    actual_amount_x10 = get_row_amount_x10(row, 'actual_amount')
     return {
         'id': row.get('id') or '',
-        'requestAmount': request_amount,
-        'request_amount': request_amount,
-        'feeAmount': fee_amount,
-        'fee_amount': fee_amount,
-        'actualAmount': actual_amount,
-        'actual_amount': actual_amount,
+        'requestAmount': x10_to_amount(request_amount_x10),
+        'request_amount': x10_to_amount(request_amount_x10),
+        'requestAmountX10': request_amount_x10,
+        'feeAmount': x10_to_amount(fee_amount_x10),
+        'fee_amount': x10_to_amount(fee_amount_x10),
+        'feeAmountX10': fee_amount_x10,
+        'actualAmount': x10_to_amount(actual_amount_x10),
+        'actual_amount': x10_to_amount(actual_amount_x10),
+        'actualAmountX10': actual_amount_x10,
         'feeRateText': f"{DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS / 100:.1f}%",
         'beastId': normalize_beast_id_value(row.get('beast_id')),
         'beastNick': row.get('beast_nick') or '',
@@ -1587,11 +1852,41 @@ def serialize_guarantee_row(row):
     raw_status = row.get('status') or GUARANTEE_STATUS_PENDING
     meta = get_guarantee_meta(raw_status)
     gem_amount = int(row.get('gem_amount') or 0)
-    fee_amount = int(row.get('fee_amount') or 0)
-    seller_total_cost = calculate_guarantee_seller_total_cost(gem_amount, fee_amount)
-    actual_receive = calculate_guarantee_actual_receive(gem_amount, fee_amount)
-    total_fee_amount = calculate_guarantee_total_fee(fee_amount)
+    market_price = int(row.get('market_price') or 0)
+    fee_amount_x10 = get_row_amount_x10(row, 'fee_amount')
+    fee_amount = x10_to_amount(fee_amount_x10)
+    seller_total_cost_x10 = calculate_guarantee_seller_total_cost_x10(gem_amount, fee_amount_x10)
+    actual_receive_x10 = calculate_guarantee_actual_receive_x10(gem_amount, fee_amount_x10)
+    total_fee_amount_x10 = calculate_guarantee_total_fee_x10(fee_amount_x10)
+    seller_total_cost = x10_to_amount(seller_total_cost_x10)
+    actual_receive = x10_to_amount(actual_receive_x10)
+    total_fee_amount = x10_to_amount(total_fee_amount_x10)
     seller_confirmed = bool(row.get('seller_confirmed_at'))
+
+    # 计算待匹配保单的过期时间戳（30分钟），用于前端显示倒计时
+    created_at = row.get('created_at')
+    expire_at_ms = 0
+    if raw_status == GUARANTEE_STATUS_PENDING and created_at:
+        try:
+            created_ts = created_at.timestamp() if hasattr(created_at, 'timestamp') else float(created_at)
+            expire_at_ms = int((created_ts + GUARANTEE_AUTO_CLOSE_MINUTES * 60) * 1000)
+        except Exception:
+            expire_at_ms = 0
+
+    matched_at = row.get('matched_at')
+    has_buyer_proof = bool(str(row.get('buyer_proof_image') or '').strip())
+    abandon_proof_expire_at_ms = 0
+    computed_auto_confirm_dt = None
+    if raw_status == GUARANTEE_STATUS_MATCHED and isinstance(matched_at, datetime) and not seller_confirmed:
+        if not has_buyer_proof:
+            try:
+                abandon_proof_expire_at_ms = int(matched_at.timestamp() * 1000) + GUARANTEE_MATCH_ABANDON_MINUTES * 60 * 1000
+            except Exception:
+                abandon_proof_expire_at_ms = 0
+        else:
+            computed_auto_confirm_dt = matched_at + timedelta(hours=GUARANTEE_AUTO_CONFIRM_HOURS)
+    auto_confirm_src = row.get('auto_confirm_at') or computed_auto_confirm_dt
+    auto_confirm_time_str = format_dt(auto_confirm_src) if auto_confirm_src else ''
 
     status_text = meta['text']
     status_short_text = meta['short_text']
@@ -1601,7 +1896,7 @@ def serialize_guarantee_row(row):
         status_short_text = '到账中'
         status_desc = f'卖家已确认交易完成，系统正在给买家发放宝石（到账后实收 {actual_receive}）'
     elif raw_status == GUARANTEE_STATUS_DONE:
-        status_desc = f'系统已按双边手续费规则完成结算，买家最终实收 {actual_receive} 宝石'
+        status_desc = f'交易已完成，买家最终实收 {actual_receive} 宝石'
 
 
     return {
@@ -1617,18 +1912,30 @@ def serialize_guarantee_row(row):
         'seller_game_nick': row.get('seller_game_nick') or '',
         'gemAmount': gem_amount,
         'gem_amount': gem_amount,
+        'marketPrice': market_price,
+        'market_price': market_price,
+        'expireAtMs': expire_at_ms,
+        'expire_at_ms': expire_at_ms,
+        'abandonProofExpireAtMs': abandon_proof_expire_at_ms,
+        'abandon_proof_expire_at_ms': abandon_proof_expire_at_ms,
         'feeAmount': fee_amount,
         'fee_amount': fee_amount,
+        'feeAmountX10': fee_amount_x10,
         'sellerFeeAmount': fee_amount,
         'seller_fee_amount': fee_amount,
+        'sellerFeeAmountX10': fee_amount_x10,
         'buyerFeeAmount': fee_amount,
         'buyer_fee_amount': fee_amount,
+        'buyerFeeAmountX10': fee_amount_x10,
         'totalFeeAmount': total_fee_amount,
         'total_fee_amount': total_fee_amount,
+        'totalFeeAmountX10': total_fee_amount_x10,
         'sellerTotalCost': seller_total_cost,
         'seller_total_cost': seller_total_cost,
+        'sellerTotalCostX10': seller_total_cost_x10,
         'actualReceive': actual_receive,
         'actual_receive': actual_receive,
+        'actualReceiveX10': actual_receive_x10,
 
         'remark': row.get('remark') or '',
         'buyerTradeNote': row.get('buyer_trade_note') or '',
@@ -1657,9 +1964,9 @@ def serialize_guarantee_row(row):
         'buyer_proof_uploaded_at': format_dt(row.get('buyer_proof_uploaded_at')),
         'buyerProofUploadedTime': format_dt(row.get('buyer_proof_uploaded_at')),
         'buyer_proof_uploaded_time': format_dt(row.get('buyer_proof_uploaded_at')),
-        'autoConfirmTime': format_dt(row.get('auto_confirm_at')),
+        'autoConfirmTime': auto_confirm_time_str,
 
-        'auto_confirm_time': format_dt(row.get('auto_confirm_at')),
+        'auto_confirm_time': auto_confirm_time_str,
         'sellerConfirmed': seller_confirmed,
         'seller_confirmed': seller_confirmed,
         'sellerConfirmedTime': format_dt(row.get('seller_confirmed_at')),
@@ -1679,8 +1986,11 @@ def build_user_stats(conn, user_id):
         guarantee_total = int((cursor.fetchone() or {}).get('total') or 0)
         cursor.execute("SELECT COUNT(*) AS total FROM guarantee_orders WHERE seller_user_id=%s AND status=%s", (user_id, GUARANTEE_STATUS_DONE))
         guarantee_done = int((cursor.fetchone() or {}).get('total') or 0)
-        cursor.execute("SELECT COALESCE(SUM(change_amount), 0) AS total FROM wallet_transactions WHERE user_id=%s AND change_amount > 0 AND biz_type <> 'recharge'", (user_id,))
-        earned_gem = int((cursor.fetchone() or {}).get('total') or 0)
+        cursor.execute(
+            "SELECT COALESCE(SUM(change_amount_x10), 0) AS total_x10 FROM wallet_transactions WHERE user_id=%s AND change_amount_x10 > 0 AND biz_type <> 'recharge'",
+            (user_id,)
+        )
+        earned_gem = x10_to_amount((cursor.fetchone() or {}).get('total_x10') or 0)
         cursor.execute(
             """
             SELECT COUNT(*) AS total
@@ -1780,9 +2090,10 @@ def mark_recharge_success(conn, user_row, order_row, matched_log, verify_code):
         return serialize_wallet(wallet)['gemBalance']
 
     wallet = lock_wallet(conn, user_row['id'])
-    balance_before = int(wallet.get('gem_balance') or 0)
+    balance_before_x10 = get_row_amount_x10(wallet, 'gem_balance')
     amount = int(order_row.get('amount') or 0)
-    balance_after = balance_before + amount
+    amount_x10 = to_x10_amount(amount)
+    balance_after_x10 = balance_before_x10 + amount_x10
     verified_at_ms = now_ms()
     matched_timestamp = int(matched_log.get('timestamp') or 0)
     matched_datetime = matched_log.get('datetime') or ''
@@ -1800,18 +2111,28 @@ def mark_recharge_success(conn, user_row, order_row, matched_log, verify_code):
             cursor.execute('SELECT status FROM recharge_orders WHERE id=%s AND user_id=%s LIMIT 1', (order_row['id'], user_row['id']))
             latest = cursor.fetchone() or {}
             if latest.get('status') == 'success':
-                cursor.execute('SELECT gem_balance FROM user_wallets WHERE user_id=%s LIMIT 1', (user_row['id'],))
+                cursor.execute('SELECT gem_balance_x10, gem_balance FROM user_wallets WHERE user_id=%s LIMIT 1', (user_row['id'],))
                 wallet_row = cursor.fetchone() or {}
-                return int(wallet_row.get('gem_balance') or balance_after)
+                return x10_to_amount(get_row_amount_x10(wallet_row, 'gem_balance') or balance_after_x10)
             raise ValueError('订单状态已变化，请刷新后重试')
 
         cursor.execute(
             '''
             UPDATE user_wallets
-            SET gem_balance=%s, total_recharged=total_recharged+%s, updated_at=CURRENT_TIMESTAMP
+            SET gem_balance=%s,
+                gem_balance_x10=%s,
+                total_recharged=total_recharged+%s,
+                total_recharged_x10=total_recharged_x10+%s,
+                updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (balance_after, amount, user_row['id'])
+            (
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                amount,
+                amount_x10,
+                user_row['id'],
+            )
         )
 
     insert_wallet_transaction(
@@ -1819,14 +2140,17 @@ def mark_recharge_success(conn, user_row, order_row, matched_log, verify_code):
         user_row['id'],
         'recharge',
         amount,
-        balance_before,
-        balance_after,
+        x10_to_amount(balance_before_x10),
+        x10_to_amount(balance_after_x10),
         'recharge_order',
         order_row['id'],
-        f"充值到账 #{order_row['id']}"
+        f"充值到账 #{order_row['id']}",
+        change_amount_x10=amount_x10,
+        balance_before_x10=balance_before_x10,
+        balance_after_x10=balance_after_x10,
     )
     activate_promotion_for_user(conn, user_row['id'])
-    return balance_after
+    return x10_to_amount(balance_after_x10)
 
 
 
@@ -1855,24 +2179,27 @@ def create_transfer_request(conn, user_row, request_amount, user_note=''):
         raise ValueError('每个账号每天只能申请 10 次转出')
 
     wallet = lock_wallet(conn, user_row['id'])
-    balance_before = int(wallet.get('gem_balance') or 0)
-    locked_before = int(wallet.get('locked_gems') or 0)
-    if balance_before < request_amount:
-        raise ValueError(f'宝石余额不足，当前仅有 {balance_before} 宝石')
+    balance_before_x10 = get_row_amount_x10(wallet, 'gem_balance')
+    locked_before_x10 = get_row_amount_x10(wallet, 'locked_gems')
+    request_amount_x10 = to_x10_amount(request_amount)
+    if balance_before_x10 < request_amount_x10:
+        raise ValueError(f'宝石余额不足，当前仅有 {x10_to_amount(balance_before_x10)} 宝石')
 
     fee_amount = calculate_transfer_out_fee(request_amount)
     actual_amount = max(request_amount - fee_amount, 0)
+    fee_amount_x10 = to_x10_amount(fee_amount)
+    actual_amount_x10 = to_x10_amount(actual_amount)
     request_id = generate_order_no('TX', user_row['id'])
-    balance_after = balance_before - request_amount
-    locked_after = locked_before + request_amount
+    balance_after_x10 = balance_before_x10 - request_amount_x10
+    locked_after_x10 = locked_before_x10 + request_amount_x10
 
     with conn.cursor() as cursor:
         cursor.execute(
             '''
             INSERT INTO gem_transfer_requests (
-                id, user_id, beast_id, beast_nick, request_amount, fee_amount, actual_amount,
+                id, user_id, beast_id, beast_nick, request_amount, request_amount_x10, fee_amount, fee_amount_x10, actual_amount, actual_amount_x10,
                 fee_basis_points, status, user_note
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''',
             (
                 request_id,
@@ -1880,8 +2207,11 @@ def create_transfer_request(conn, user_row, request_amount, user_note=''):
                 beast_id,
                 (user_row.get('nick_name') or '方块兽玩家')[:64],
                 request_amount,
+                request_amount_x10,
                 fee_amount,
+                fee_amount_x10,
                 actual_amount,
+                actual_amount_x10,
                 DEFAULT_TRANSFER_OUT_FEE_BASIS_POINTS,
                 TRANSFER_REQUEST_STATUS_PENDING,
                 str(user_note or '').strip()[:255],
@@ -1890,10 +2220,20 @@ def create_transfer_request(conn, user_row, request_amount, user_note=''):
         cursor.execute(
             '''
             UPDATE user_wallets
-            SET gem_balance=%s, locked_gems=%s, updated_at=CURRENT_TIMESTAMP
+            SET gem_balance=%s,
+                gem_balance_x10=%s,
+                locked_gems=%s,
+                locked_gems_x10=%s,
+                updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (balance_after, locked_after, user_row['id'])
+            (
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                sync_legacy_int_amount(locked_after_x10),
+                locked_after_x10,
+                user_row['id'],
+            )
         )
 
     insert_wallet_transaction(
@@ -1901,11 +2241,14 @@ def create_transfer_request(conn, user_row, request_amount, user_note=''):
         user_row['id'],
         'transfer_out_lock',
         -request_amount,
-        balance_before,
-        balance_after,
+        x10_to_amount(balance_before_x10),
+        x10_to_amount(balance_after_x10),
         'transfer_request',
         request_id,
-        f"提交转出申请 #{request_id}"
+        f"提交转出申请 #{request_id}",
+        change_amount_x10=-request_amount_x10,
+        balance_before_x10=balance_before_x10,
+        balance_after_x10=balance_after_x10,
     )
     return find_transfer_request(conn, request_id)
 
@@ -1924,9 +2267,10 @@ def complete_transfer_request(conn, request_id, admin_note=''):
 
     user_id = int(request_row.get('user_id') or 0)
     request_amount = int(request_row.get('request_amount') or 0)
+    request_amount_x10 = get_row_amount_x10(request_row, 'request_amount')
     wallet = lock_wallet(conn, user_id)
-    locked_before = int(wallet.get('locked_gems') or 0)
-    if locked_before < request_amount:
+    locked_before_x10 = get_row_amount_x10(wallet, 'locked_gems')
+    if locked_before_x10 < request_amount_x10:
         raise ValueError('锁定宝石不足，无法完成转出，请检查数据')
 
     with conn.cursor() as cursor:
@@ -1951,12 +2295,20 @@ def complete_transfer_request(conn, request_id, admin_note=''):
         cursor.execute(
             '''
             UPDATE user_wallets
-            SET locked_gems=locked_gems-%s,
+            SET locked_gems=%s,
+                locked_gems_x10=%s,
                 total_spent=total_spent+%s,
+                total_spent_x10=total_spent_x10+%s,
                 updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (request_amount, request_amount, user_id)
+            (
+                sync_legacy_int_amount(locked_before_x10 - request_amount_x10),
+                locked_before_x10 - request_amount_x10,
+                request_amount,
+                request_amount_x10,
+                user_id,
+            )
         )
     return find_transfer_request(conn, request_id)
 
@@ -1974,12 +2326,13 @@ def reject_transfer_request(conn, request_id, admin_note=''):
 
     user_id = int(request_row.get('user_id') or 0)
     request_amount = int(request_row.get('request_amount') or 0)
+    request_amount_x10 = get_row_amount_x10(request_row, 'request_amount')
     wallet = lock_wallet(conn, user_id)
-    balance_before = int(wallet.get('gem_balance') or 0)
-    locked_before = int(wallet.get('locked_gems') or 0)
-    if locked_before < request_amount:
+    balance_before_x10 = get_row_amount_x10(wallet, 'gem_balance')
+    locked_before_x10 = get_row_amount_x10(wallet, 'locked_gems')
+    if locked_before_x10 < request_amount_x10:
         raise ValueError('锁定宝石不足，无法拒绝转出，请检查数据')
-    balance_after = balance_before + request_amount
+    balance_after_x10 = balance_before_x10 + request_amount_x10
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -2004,11 +2357,19 @@ def reject_transfer_request(conn, request_id, admin_note=''):
             '''
             UPDATE user_wallets
             SET gem_balance=%s,
-                locked_gems=locked_gems-%s,
+                gem_balance_x10=%s,
+                locked_gems=%s,
+                locked_gems_x10=%s,
                 updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (balance_after, request_amount, user_id)
+            (
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                sync_legacy_int_amount(locked_before_x10 - request_amount_x10),
+                locked_before_x10 - request_amount_x10,
+                user_id,
+            )
         )
 
     insert_wallet_transaction(
@@ -2016,15 +2377,275 @@ def reject_transfer_request(conn, request_id, admin_note=''):
         user_id,
         'transfer_out_unlock',
         request_amount,
-        balance_before,
-        balance_after,
+        x10_to_amount(balance_before_x10),
+        x10_to_amount(balance_after_x10),
         'transfer_request',
         request_id,
-        f"后台已拒绝转出申请 #{request_id}，解锁 {request_amount} 宝石"
+        f"后台已拒绝转出申请 #{request_id}，解锁 {request_amount} 宝石",
+        change_amount_x10=request_amount_x10,
+        balance_before_x10=balance_before_x10,
+        balance_after_x10=balance_after_x10,
     )
     return find_transfer_request(conn, request_id)
 
 
+
+
+def apply_guarantee_auto_close(conn, order_no=None):
+    """自动关闭：pending 状态超过 30 分钟未匹配的保单，宝石原路退还卖家。"""
+    conditions = [
+        'status=%s',
+        'buyer_user_id IS NULL',
+        f'created_at <= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {GUARANTEE_AUTO_CLOSE_MINUTES} MINUTE)',
+    ]
+    params = [GUARANTEE_STATUS_PENDING]
+    if order_no:
+        conditions.append('order_no=%s')
+        params.append(str(order_no).strip())
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"SELECT order_no FROM guarantee_orders WHERE {' AND '.join(conditions)}",
+            tuple(params)
+        )
+        rows = cursor.fetchall() or []
+
+    for row in rows:
+        target_no = str((row or {}).get('order_no') or '').strip()
+        if not target_no:
+            continue
+        try:
+            _close_pending_guarantee_refund(conn, target_no)
+        except Exception:
+            pass
+
+
+def _guarantee_refund_seller_unlock_wallet(conn, order_row, order_no, refund_remark):
+    """订单已置为 closed 后，将卖家锁定宝石退回可用余额并记账。"""
+    seller_user_id = int(order_row.get('seller_user_id') or 0)
+    gem_amount = int(order_row.get('gem_amount') or 0)
+    fee_amount_x10 = get_row_amount_x10(order_row, 'fee_amount')
+    total_cost_x10 = calculate_guarantee_seller_total_cost_x10(gem_amount, fee_amount_x10)
+
+    seller_wallet = lock_wallet(conn, seller_user_id)
+    balance_before_x10 = get_row_amount_x10(seller_wallet, 'gem_balance')
+    locked_before_x10 = get_row_amount_x10(seller_wallet, 'locked_gems')
+    balance_after_x10 = balance_before_x10 + total_cost_x10
+    locked_after_x10 = max(0, locked_before_x10 - total_cost_x10)
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            '''
+            UPDATE user_wallets
+            SET gem_balance=%s,
+                gem_balance_x10=%s,
+                locked_gems=%s,
+                locked_gems_x10=%s,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE user_id=%s
+            ''',
+            (
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                sync_legacy_int_amount(locked_after_x10),
+                locked_after_x10,
+                seller_user_id,
+            )
+        )
+
+    remark = str(refund_remark or f'保单 {order_no} 关闭，宝石已退还')[:255]
+    insert_wallet_transaction(
+        conn,
+        seller_user_id,
+        'guarantee_refund',
+        x10_to_amount(total_cost_x10),
+        x10_to_amount(balance_before_x10),
+        x10_to_amount(balance_after_x10),
+        'guarantee_order',
+        order_no,
+        remark,
+        change_amount_x10=total_cost_x10,
+        balance_before_x10=balance_before_x10,
+        balance_after_x10=balance_after_x10,
+    )
+
+
+def _close_pending_guarantee_refund(conn, order_no, refund_remark=None):
+    """将一笔 pending 且无买家的保单关闭并退款给卖家。"""
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT * FROM guarantee_orders WHERE order_no=%s FOR UPDATE', (order_no,))
+        order_row = cursor.fetchone()
+
+    if not order_row or order_row.get('status') != GUARANTEE_STATUS_PENDING:
+        return
+    if int(order_row.get('buyer_user_id') or 0):
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            'UPDATE guarantee_orders SET status=%s, updated_at=CURRENT_TIMESTAMP WHERE order_no=%s AND status=%s',
+            (GUARANTEE_STATUS_CLOSED, order_no, GUARANTEE_STATUS_PENDING)
+        )
+        if cursor.rowcount <= 0:
+            return
+
+    note = refund_remark or f'保单 {order_no} 超时未匹配，宝石已退还'
+    _guarantee_refund_seller_unlock_wallet(conn, order_row, order_no, note)
+
+
+def apply_guarantee_matched_abandon_no_proof(conn, order_no=None):
+    """已匹配、卖家未确认、且一直无交易截图超过 GUARANTEE_MATCH_ABANDON_MINUTES 分钟 → 关单退还卖家。"""
+    conditions = [
+        'status=%s',
+        'seller_confirmed_at IS NULL',
+        "(buyer_proof_image IS NULL OR TRIM(buyer_proof_image)='')",
+        f'matched_at <= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {GUARANTEE_MATCH_ABANDON_MINUTES} MINUTE)',
+    ]
+    params = [GUARANTEE_STATUS_MATCHED]
+    if order_no:
+        conditions.append('order_no=%s')
+        params.append(str(order_no).strip())
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"SELECT order_no FROM guarantee_orders WHERE {' AND '.join(conditions)}",
+            tuple(params)
+        )
+        rows = cursor.fetchall() or []
+
+    for row in rows:
+        target_no = str((row or {}).get('order_no') or '').strip()
+        if not target_no:
+            continue
+        try:
+            _close_matched_no_proof_refund(conn, target_no)
+        except Exception:
+            pass
+
+
+def _close_matched_no_proof_refund(conn, order_no):
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT * FROM guarantee_orders WHERE order_no=%s FOR UPDATE', (order_no,))
+        order_row = cursor.fetchone()
+
+    if not order_row or order_row.get('status') != GUARANTEE_STATUS_MATCHED:
+        return
+    if order_row.get('seller_confirmed_at'):
+        return
+    if str(order_row.get('buyer_proof_image') or '').strip():
+        return
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f'''
+            UPDATE guarantee_orders
+            SET status=%s, updated_at=CURRENT_TIMESTAMP
+            WHERE order_no=%s AND status=%s
+              AND seller_confirmed_at IS NULL
+              AND (buyer_proof_image IS NULL OR TRIM(buyer_proof_image)='')
+              AND matched_at <= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {GUARANTEE_MATCH_ABANDON_MINUTES} MINUTE)
+            ''',
+            (GUARANTEE_STATUS_CLOSED, order_no, GUARANTEE_STATUS_MATCHED)
+        )
+        if cursor.rowcount <= 0:
+            return
+
+    note = f'保单 {order_no} 匹配后{GUARANTEE_MATCH_ABANDON_MINUTES}分钟内未上传交易截图，视为放弃，宝石已退还卖家'
+    _guarantee_refund_seller_unlock_wallet(conn, order_row, order_no, note)
+
+
+def seller_cancel_pending_guarantee_order(conn, order_no, seller_user_row):
+    """卖家取消「待匹配、尚无买家」的保单，锁定宝石立即退还。"""
+    apply_guarantee_matched_abandon_no_proof(conn, order_no=order_no)
+    apply_guarantee_auto_close(conn, order_no=order_no)
+    order_row = find_guarantee_order_for_update(conn, order_no)
+    if not order_row:
+        raise ValueError('未找到担保单')
+    if int(order_row.get('seller_user_id') or 0) != int(seller_user_row.get('id') or 0):
+        raise PermissionError('只有卖家本人才能取消保单')
+    if (order_row.get('status') or GUARANTEE_STATUS_PENDING) != GUARANTEE_STATUS_PENDING:
+        raise ValueError('仅「等待买家匹配」状态的保单可取消')
+    if int(order_row.get('buyer_user_id') or 0):
+        raise ValueError('已有买家匹配，无法取消，请使用平台流程或联系客服')
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            'UPDATE guarantee_orders SET status=%s, updated_at=CURRENT_TIMESTAMP WHERE order_no=%s AND status=%s',
+            (GUARANTEE_STATUS_CLOSED, order_no, GUARANTEE_STATUS_PENDING)
+        )
+        if cursor.rowcount <= 0:
+            raise ValueError('取消失败，请刷新后重试')
+
+    note = f'保单 {order_no} 卖家主动取消挂单，宝石已退还'
+    _guarantee_refund_seller_unlock_wallet(conn, order_row, order_no, note)
+    return find_guarantee_order(conn, order_no)
+
+
+def buyer_cancel_guarantee_match(conn, order_no, buyer_user_row):
+    """买家在卖家未确认前取消匹配，保单回到 pending 状态，等待新买家。"""
+    with conn.cursor() as cursor:
+        cursor.execute('SELECT * FROM guarantee_orders WHERE order_no=%s FOR UPDATE', (order_no,))
+        order_row = cursor.fetchone()
+
+    if not order_row:
+        raise ValueError('未找到担保单')
+
+    if int(order_row.get('buyer_user_id') or 0) != int(buyer_user_row.get('id') or 0):
+        raise PermissionError('只有买家本人才能取消匹配')
+
+    current_status = order_row.get('status') or GUARANTEE_STATUS_PENDING
+    if current_status != GUARANTEE_STATUS_MATCHED:
+        raise ValueError('当前保单不在待确认状态，无法取消匹配')
+    if order_row.get('seller_confirmed_at'):
+        raise ValueError('卖家已确认交易完成，无法取消匹配')
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            '''
+            UPDATE guarantee_orders
+            SET buyer_user_id=NULL, buyer_beast_id='', buyer_beast_nick='',
+                buyer_trade_note='', buyer_proof_image='', buyer_proof_uploaded_at=NULL,
+                status=%s, matched_at=NULL, seller_confirmed_at=NULL, updated_at=CURRENT_TIMESTAMP
+            WHERE order_no=%s AND status=%s
+            ''',
+            (GUARANTEE_STATUS_PENDING, order_no, GUARANTEE_STATUS_MATCHED)
+        )
+        if cursor.rowcount <= 0:
+            raise ValueError('取消匹配失败，请刷新后重试')
+
+    return find_guarantee_order(conn, order_no)
+
+
+def buyer_upload_guarantee_proof(conn, order_no, buyer_user_row, buyer_proof_image=''):
+    """已匹配买家补传交易截图（匹配时可不传，须在超时前补传）。"""
+    apply_guarantee_matched_abandon_no_proof(conn, order_no=order_no)
+    buyer_proof_image = str(buyer_proof_image or '').strip()[:255]
+    if not buyer_proof_image:
+        raise ValueError('请上传交易截图')
+    order_row = find_guarantee_order_for_update(conn, order_no)
+    if not order_row:
+        raise ValueError('未找到担保单')
+    if int(order_row.get('buyer_user_id') or 0) != int(buyer_user_row.get('id') or 0):
+        raise PermissionError('只有匹配买家本人可上传截图')
+    if (order_row.get('status') or GUARANTEE_STATUS_PENDING) != GUARANTEE_STATUS_MATCHED:
+        raise ValueError('当前状态不可上传截图')
+    if order_row.get('seller_confirmed_at'):
+        raise ValueError('卖家已确认，无法再修改截图')
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            '''
+            UPDATE guarantee_orders
+            SET buyer_proof_image=%s,
+                buyer_proof_uploaded_at=CURRENT_TIMESTAMP,
+                updated_at=CURRENT_TIMESTAMP
+            WHERE order_no=%s AND status=%s AND buyer_user_id=%s AND seller_confirmed_at IS NULL
+            ''',
+            (buyer_proof_image, order_no, GUARANTEE_STATUS_MATCHED, buyer_user_row['id'])
+        )
+        if cursor.rowcount <= 0:
+            raise ValueError('上传失败，请刷新后重试')
+    return find_guarantee_order(conn, order_no)
 
 
 def apply_guarantee_auto_confirm(conn, order_no=None):
@@ -2032,6 +2653,8 @@ def apply_guarantee_auto_confirm(conn, order_no=None):
         'status=%s',
         'seller_confirmed_at IS NULL',
         'matched_at IS NOT NULL',
+        # 无截图的单走「放弃交易」关单逻辑，不得自动确认给买家
+        "(buyer_proof_image IS NOT NULL AND TRIM(buyer_proof_image)<>'')",
         f'matched_at <= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL {GUARANTEE_AUTO_CONFIRM_HOURS} HOUR)',
     ]
     params = [GUARANTEE_STATUS_MATCHED]
@@ -2080,14 +2703,20 @@ def settle_confirmed_guarantee_orders(conn, order_no=None):
         target_order_no = str((row or {}).get('order_no') or '').strip()
         if not target_order_no:
             continue
-        complete_guarantee_transfer(conn, target_order_no)
-
-        settled_count += 1
+        try:
+            with get_connection(autocommit=False) as tx_conn:
+                complete_guarantee_transfer(tx_conn, target_order_no)
+                tx_conn.commit()
+            settled_count += 1
+        except Exception:
+            pass
     return settled_count
 
 
 
 def find_guarantee_order(conn, order_no):
+    apply_guarantee_matched_abandon_no_proof(conn, order_no=order_no)
+    apply_guarantee_auto_close(conn, order_no=order_no)
     apply_guarantee_auto_confirm(conn, order_no=order_no)
     settle_confirmed_guarantee_orders(conn, order_no=order_no)
     with conn.cursor() as cursor:
@@ -2120,6 +2749,8 @@ def find_guarantee_order_for_update(conn, order_no):
 
 
 def list_guarantee_orders(conn, user_id=None, role='seller', limit=20, status=None):
+    apply_guarantee_matched_abandon_no_proof(conn)
+    apply_guarantee_auto_close(conn)
     apply_guarantee_auto_confirm(conn)
     settle_confirmed_guarantee_orders(conn)
     limit = max(1, min(200, int(limit)))
@@ -2170,9 +2801,11 @@ def create_guarantee_order(
     trade_quantity=1,
     seller_game_id='',
     seller_game_nick='',
+    market_price=0,
 ):
     gem_amount = int(gem_amount or 0)
-    fee_amount = int(fee_amount or 0)
+    market_price = max(0, int(market_price or 0))
+    fee_amount_x10 = int(fee_amount or DEFAULT_GUARANTEE_FEE_X10)
     trade_quantity = max(1, int(trade_quantity or 1))
     pet_name = str(pet_name or '').strip()[:64]
     seller_game_id = str(seller_game_id or '').strip()[:32]
@@ -2183,7 +2816,7 @@ def create_guarantee_order(
         raise ValueError('请选择兽王类型')
     if gem_amount <= 0:
         raise ValueError('请输入正确的担保宝石数量')
-    if fee_amount < 0:
+    if fee_amount_x10 < 0:
         raise ValueError('手续费不能小于 0')
     if not seller_game_id:
         raise ValueError('请填写地球猎人ID号')
@@ -2191,16 +2824,16 @@ def create_guarantee_order(
         raise ValueError('请填写地球猎人昵称')
 
     wallet = lock_wallet(conn, user_row['id'])
-    balance_before = int(wallet.get('gem_balance') or 0)
-    locked_before = int(wallet.get('locked_gems') or 0)
-    total_cost = calculate_guarantee_seller_total_cost(gem_amount, fee_amount)
-    if balance_before < total_cost:
-        raise ValueError(f'余额不足，当前仅有 {balance_before} 宝石，需要至少 {total_cost} 宝石')
+    balance_before_x10 = get_row_amount_x10(wallet, 'gem_balance')
+    locked_before_x10 = get_row_amount_x10(wallet, 'locked_gems')
+    total_cost_x10 = calculate_guarantee_seller_total_cost_x10(gem_amount, fee_amount_x10)
+    if balance_before_x10 < total_cost_x10:
+        raise ValueError(f'余额不足，当前仅有 {x10_to_amount(balance_before_x10)} 宝石，需要至少 {x10_to_amount(total_cost_x10)} 宝石')
 
 
     order_no = generate_order_no('GUA', user_row['id'])
-    balance_after = balance_before - total_cost
-    locked_after = locked_before + total_cost
+    balance_after_x10 = balance_before_x10 - total_cost_x10
+    locked_after_x10 = locked_before_x10 + total_cost_x10
     seller_beast_id = normalize_beast_id_value(user_row.get('beast_id'))
 
     with conn.cursor() as cursor:
@@ -2208,8 +2841,8 @@ def create_guarantee_order(
             '''
             INSERT INTO guarantee_orders (
                 order_no, seller_user_id, seller_beast_id, pet_name, trade_quantity,
-                seller_game_id, seller_game_nick, gem_amount, fee_amount, remark, status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                seller_game_id, seller_game_nick, gem_amount, market_price, fee_amount, fee_amount_x10, remark, status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''',
             (
                 order_no,
@@ -2220,7 +2853,9 @@ def create_guarantee_order(
                 seller_game_id,
                 seller_game_nick,
                 gem_amount,
-                fee_amount,
+                market_price,
+                sync_legacy_int_amount(fee_amount_x10),
+                fee_amount_x10,
                 remark,
                 GUARANTEE_STATUS_PENDING,
             )
@@ -2228,22 +2863,35 @@ def create_guarantee_order(
         cursor.execute(
             '''
             UPDATE user_wallets
-            SET gem_balance=%s, locked_gems=%s, updated_at=CURRENT_TIMESTAMP
+            SET gem_balance=%s,
+                gem_balance_x10=%s,
+                locked_gems=%s,
+                locked_gems_x10=%s,
+                updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (balance_after, locked_after, user_row['id'])
+            (
+                sync_legacy_int_amount(balance_after_x10),
+                balance_after_x10,
+                sync_legacy_int_amount(locked_after_x10),
+                locked_after_x10,
+                user_row['id']
+            )
         )
 
     insert_wallet_transaction(
         conn,
         user_row['id'],
         'guarantee_lock',
-        -total_cost,
-        balance_before,
-        balance_after,
+        -x10_to_amount(total_cost_x10),
+        x10_to_amount(balance_before_x10),
+        x10_to_amount(balance_after_x10),
         'guarantee_order',
         order_no,
-        f"担保锁定 #{order_no}（卖家实扣 {total_cost}，含手续费 {fee_amount}）"
+        f"担保锁定 #{order_no}（卖家实扣 {x10_to_amount(total_cost_x10)}，含手续费 {x10_to_amount(fee_amount_x10)}）",
+        change_amount_x10=-total_cost_x10,
+        balance_before_x10=balance_before_x10,
+        balance_after_x10=balance_after_x10,
     )
 
     return find_guarantee_order(conn, order_no)
@@ -2252,6 +2900,8 @@ def create_guarantee_order(
 
 def match_guarantee_order(conn, order_no, buyer_user_row, buyer_beast_id, buyer_beast_nick, buyer_trade_note='', buyer_proof_image=''):
 
+    apply_guarantee_matched_abandon_no_proof(conn, order_no=order_no)
+    apply_guarantee_auto_close(conn, order_no=order_no)
     apply_guarantee_auto_confirm(conn, order_no=order_no)
     order_row = find_guarantee_order_for_update(conn, order_no)
     if not order_row:
@@ -2265,23 +2915,40 @@ def match_guarantee_order(conn, order_no, buyer_user_row, buyer_beast_id, buyer_
         raise ValueError('该担保单已完成，不能重复匹配')
     if current_status == GUARANTEE_STATUS_APPEAL:
         raise ValueError('该担保单正在申诉中，暂时不能匹配')
+    if current_status == GUARANTEE_STATUS_CLOSED:
+        raise ValueError('该保单已关闭（超时未匹配或已取消），无法再匹配，请联系卖家重新挂单')
 
     if current_status == GUARANTEE_STATUS_MATCHED:
         existing_buyer_id = int(order_row.get('buyer_user_id') or 0)
         if existing_buyer_id and existing_buyer_id != int(buyer_user_row.get('id') or 0):
             raise ValueError('该担保单已被其他买家匹配')
+        if existing_buyer_id == int(buyer_user_row.get('id') or 0) and not order_row.get('seller_confirmed_at'):
+            ubid = str(buyer_beast_id or buyer_user_row.get('beast_id') or '').strip()[:32]
+            ubnick = str(buyer_beast_nick or buyer_user_row.get('nick_name') or '').strip()[:64]
+            unote = str(buyer_trade_note or '').strip()[:255]
+            uproof = str(buyer_proof_image or '').strip()[:255]
+            if ubid and ubnick:
+                with conn.cursor() as cursor:
+                    cursor.execute(
+                        '''
+                        UPDATE guarantee_orders
+                        SET buyer_beast_id=%s,
+                            buyer_beast_nick=%s,
+                            buyer_trade_note=%s,
+                            buyer_proof_image=IF(TRIM(%s)='', buyer_proof_image, %s),
+                            buyer_proof_uploaded_at=IF(TRIM(%s)='', buyer_proof_uploaded_at, CURRENT_TIMESTAMP),
+                            updated_at=CURRENT_TIMESTAMP
+                        WHERE order_no=%s AND status=%s AND buyer_user_id=%s AND seller_confirmed_at IS NULL
+                        ''',
+                        (ubid, ubnick, unote, uproof, uproof, uproof, order_no, GUARANTEE_STATUS_MATCHED, buyer_user_row['id'])
+                    )
         return find_guarantee_order(conn, order_no)
 
     buyer_beast_id = str(buyer_beast_id or buyer_user_row.get('beast_id') or '').strip()[:32]
     buyer_beast_nick = str(buyer_beast_nick or buyer_user_row.get('nick_name') or '').strip()[:64]
     buyer_trade_note = str(buyer_trade_note or '').strip()[:255]
     buyer_proof_image = str(buyer_proof_image or '').strip()[:255]
-    if not buyer_beast_id:
-        raise ValueError('请填写买家方块兽ID')
-    if not buyer_beast_nick:
-        raise ValueError('请填写买家昵称')
-    if not buyer_proof_image:
-        raise ValueError('请上传交易截图，方便卖家核对')
+    # 匹配时不再强制要求买家填写方块兽ID/昵称，买家确认卖家信息后直接匹配即可，截图须在匹配后时限内补传
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -2292,7 +2959,7 @@ def match_guarantee_order(conn, order_no, buyer_user_row, buyer_beast_id, buyer_
                 buyer_beast_nick=%s,
                 buyer_trade_note=%s,
                 buyer_proof_image=%s,
-                buyer_proof_uploaded_at=CURRENT_TIMESTAMP,
+                buyer_proof_uploaded_at=IF(TRIM(%s)='', NULL, CURRENT_TIMESTAMP),
                 status=%s,
                 matched_at=CURRENT_TIMESTAMP,
                 seller_confirmed_at=NULL,
@@ -2304,6 +2971,7 @@ def match_guarantee_order(conn, order_no, buyer_user_row, buyer_beast_id, buyer_
                 buyer_beast_id,
                 buyer_beast_nick,
                 buyer_trade_note,
+                buyer_proof_image,
                 buyer_proof_image,
                 GUARANTEE_STATUS_MATCHED,
                 order_no,
@@ -2335,6 +3003,8 @@ def seller_confirm_guarantee_order(conn, order_no, seller_user_row):
         raise ValueError('当前保单还没有买家匹配')
     if order_row.get('seller_confirmed_at'):
         return find_guarantee_order(conn, order_no)
+    if not str(order_row.get('buyer_proof_image') or '').strip():
+        raise ValueError('买家尚未上传交易截图，请待买家上传后再确认')
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -2396,6 +3066,8 @@ def seller_reject_guarantee_order(conn, order_no, seller_user_row, reject_reason
 
 
 def list_public_guarantee_orders(conn, limit=20, pet_name=None):
+    apply_guarantee_matched_abandon_no_proof(conn)
+    apply_guarantee_auto_close(conn)
     apply_guarantee_auto_confirm(conn)
     settle_confirmed_guarantee_orders(conn)
     limit = max(1, min(100, int(limit)))
@@ -2475,42 +3147,45 @@ def build_pending_summary(conn, user_id):
 def complete_guarantee_transfer(conn, order_no, admin_note=''):
     order_row = find_guarantee_order_for_update(conn, order_no)
     if not order_row:
-        raise ValueError('未找到担保单')
+        raise ValueError('??????')
 
     current_status = order_row.get('status') or GUARANTEE_STATUS_PENDING
     if current_status == GUARANTEE_STATUS_DONE:
         return find_guarantee_order(conn, order_no)
     if current_status != GUARANTEE_STATUS_MATCHED:
-        raise ValueError('当前担保单还未进入可完成状态')
+        raise ValueError('??????????????')
     if not order_row.get('seller_confirmed_at'):
-        raise ValueError('卖家还未确认交易完成，系统暂不可结算')
+        raise ValueError('??????????????????')
 
     seller_user_id = int(order_row.get('seller_user_id') or 0)
     buyer_user_id = int(order_row.get('buyer_user_id') or 0)
     if buyer_user_id <= 0:
-        raise ValueError('当前担保单还没有买家，无法完成结算')
+        raise ValueError('?????????????????')
 
     gem_amount = int(order_row.get('gem_amount') or 0)
-    fee_amount = int(order_row.get('fee_amount') or 0)
-    total_cost = calculate_guarantee_seller_total_cost(gem_amount, fee_amount)
-    actual_receive = calculate_guarantee_actual_receive(gem_amount, fee_amount)
+    fee_amount_x10 = get_row_amount_x10(order_row, 'fee_amount')
+    total_cost_x10 = calculate_guarantee_seller_total_cost_x10(gem_amount, fee_amount_x10)
+    actual_receive_x10 = calculate_guarantee_actual_receive_x10(gem_amount, fee_amount_x10)
+    total_cost = x10_to_amount(total_cost_x10)
+    actual_receive = x10_to_amount(actual_receive_x10)
 
     wallet_ids = [seller_user_id] if seller_user_id == buyer_user_id else sorted({seller_user_id, buyer_user_id})
-
-    wallet_map = {}
-    for uid in wallet_ids:
-        wallet_map[uid] = lock_wallet(conn, uid)
+    wallet_map = {uid: lock_wallet(conn, uid) for uid in wallet_ids}
 
     seller_wallet = wallet_map[seller_user_id]
     buyer_wallet = wallet_map[buyer_user_id]
-    locked_before = int(seller_wallet.get('locked_gems') or 0)
-    if locked_before < total_cost:
-        raise ValueError('锁定宝石不足，无法完成结算，请检查订单数据')
+    locked_before_x10 = get_row_amount_x10(seller_wallet, 'locked_gems')
+    if locked_before_x10 < total_cost_x10:
+        raise ValueError('?????????????????????')
 
-    buyer_balance_before = int(buyer_wallet.get('gem_balance') or 0)
-    buyer_balance_after = buyer_balance_before + actual_receive
-    final_admin_note = str(admin_note or f'系统已自动给买家发放 {actual_receive} 宝石（买家手续费 {fee_amount}）').strip()[:255]
-
+    seller_balance_before_x10 = get_row_amount_x10(seller_wallet, 'gem_balance')
+    buyer_balance_before_x10 = get_row_amount_x10(buyer_wallet, 'gem_balance')
+    buyer_balance_after_x10 = buyer_balance_before_x10 + actual_receive_x10
+    buyer_fee_amount = x10_to_amount(int(order_row.get('buyer_fee_amount_x10') or fee_amount_x10 or 0))
+    seller_fee_amount = x10_to_amount(int(order_row.get('seller_fee_amount_x10') or fee_amount_x10 or 0))
+    final_admin_note = str(
+        admin_note or f'?????????? {actual_receive} ?????????? {x10_to_amount(fee_amount_x10)}?'
+    ).strip()[:255]
 
     with conn.cursor() as cursor:
         cursor.execute(
@@ -2530,41 +3205,74 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
             )
         )
         if cursor.rowcount <= 0:
-            raise ValueError('担保结算失败，请刷新后重试')
+            raise ValueError('?????????????')
         cursor.execute(
             '''
             UPDATE user_wallets
-            SET locked_gems=locked_gems-%s,
-                total_spent=total_spent+%s,
+            SET locked_gems=%s,
+                locked_gems_x10=%s,
+                total_spent=%s,
+                total_spent_x10=total_spent_x10+%s,
                 updated_at=CURRENT_TIMESTAMP
             WHERE user_id=%s
             ''',
-            (total_cost, total_cost, seller_user_id)
+            (
+                sync_legacy_int_amount(locked_before_x10 - total_cost_x10),
+                locked_before_x10 - total_cost_x10,
+                sync_legacy_int_amount(total_cost_x10),
+                total_cost_x10,
+                seller_user_id,
+            )
         )
-        if actual_receive > 0:
+        if actual_receive_x10 > 0:
             cursor.execute(
                 '''
                 UPDATE user_wallets
                 SET gem_balance=%s,
-                    total_earned=total_earned+%s,
+                    gem_balance_x10=%s,
+                    total_earned=%s,
+                    total_earned_x10=total_earned_x10+%s,
                     updated_at=CURRENT_TIMESTAMP
                 WHERE user_id=%s
                 ''',
-                (buyer_balance_after, actual_receive, buyer_user_id)
+                (
+                    sync_legacy_int_amount(buyer_balance_after_x10),
+                    buyer_balance_after_x10,
+                    sync_legacy_int_amount(actual_receive_x10),
+                    actual_receive_x10,
+                    buyer_user_id,
+                )
             )
 
+    insert_wallet_transaction(
+        conn,
+        seller_user_id,
+        'guarantee_complete',
+        0,
+        x10_to_amount(seller_balance_before_x10),
+        x10_to_amount(seller_balance_before_x10),
+        'guarantee_order',
+        order_no,
+        f'?????? #{order_no}???????? {actual_receive}????? {seller_fee_amount + buyer_fee_amount}?',
+        change_amount_x10=0,
+        balance_before_x10=seller_balance_before_x10,
+        balance_after_x10=seller_balance_before_x10,
+    )
 
-    if actual_receive > 0:
+    if actual_receive_x10 > 0:
         insert_wallet_transaction(
             conn,
             buyer_user_id,
             'guarantee_receive',
             actual_receive,
-            buyer_balance_before,
-            buyer_balance_after,
+            x10_to_amount(buyer_balance_before_x10),
+            x10_to_amount(buyer_balance_after_x10),
             'guarantee_order',
             order_no,
-            f"担保到账 #{order_no}（到账 {actual_receive}，已扣手续费 {fee_amount}）"
+            f'???? #{order_no}??? {actual_receive}???????? {buyer_fee_amount}?',
+            change_amount_x10=actual_receive_x10,
+            balance_before_x10=buyer_balance_before_x10,
+            balance_after_x10=buyer_balance_after_x10,
         )
 
     try:
@@ -2573,9 +3281,6 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
         pass
 
     return find_guarantee_order(conn, order_no)
-
-
-
 
 def serialize_manage_recharge_row(row):
     status = row.get('status') or 'pending'
@@ -3224,8 +3929,7 @@ def _flush_commission_pending(conn, user_id):
 
 
 def grant_order_commission(conn, order_row):
-    """担保单完成后触发：给卖家的邀请人（L1）发 0.8 宝石，给 L1 的邀请人（L2）发 0.2 宝石。
-    若受益人本次是被邀请来的首单，额外给 L1 发 2 宝石首单奖励。"""
+    """担保单完成后触发永久分佣：直推 0.3 宝石，间推 0.2 宝石，完成后秒到账。"""
     order_no = str(order_row.get('order_no') or '')
     seller_user_id = int(order_row.get('seller_user_id') or 0)
     if not order_no or seller_user_id <= 0:
@@ -3265,18 +3969,48 @@ def grant_order_commission(conn, order_row):
                 )
         except pymysql.err.IntegrityError:
             return
+        wallet = lock_wallet(conn, recipient_id)
+        balance_before_x10 = get_row_amount_x10(wallet, 'gem_balance')
+        total_earned_before_x10 = get_row_amount_x10(wallet, 'total_earned')
+        balance_after_x10 = balance_before_x10 + amount_x10
+        total_earned_after_x10 = total_earned_before_x10 + amount_x10
         with conn.cursor() as cursor:
             cursor.execute(
-                'UPDATE user_wallets SET commission_pending_x10=commission_pending_x10+%s WHERE user_id=%s',
-                (amount_x10, recipient_id)
-            )
-        flushed = _flush_commission_pending(conn, recipient_id)
-        if flushed > 0:
-            with conn.cursor() as cursor:
-                cursor.execute(
-                    'UPDATE promotion_commission_logs SET flushed_amount=%s WHERE user_id=%s AND order_no=%s AND reward_type=%s',
-                    (flushed, recipient_id, order_no, rtype)
+                '''
+                UPDATE user_wallets
+                SET gem_balance=%s,
+                    gem_balance_x10=%s,
+                    total_earned=%s,
+                    total_earned_x10=%s,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE user_id=%s
+                ''',
+                (
+                    sync_legacy_int_amount(balance_after_x10),
+                    balance_after_x10,
+                    sync_legacy_int_amount(total_earned_after_x10),
+                    total_earned_after_x10,
+                    recipient_id,
                 )
+            )
+            cursor.execute(
+                'UPDATE promotion_commission_logs SET flushed_amount=%s WHERE user_id=%s AND order_no=%s AND reward_type=%s',
+                (x10_to_amount(amount_x10), recipient_id, order_no, rtype)
+            )
+        insert_wallet_transaction(
+            conn,
+            recipient_id,
+            'promotion_commission',
+            x10_to_amount(amount_x10),
+            x10_to_amount(balance_before_x10),
+            x10_to_amount(balance_after_x10),
+            'promotion',
+            order_no,
+            remark_text,
+            change_amount_x10=amount_x10,
+            balance_before_x10=balance_before_x10,
+            balance_after_x10=balance_after_x10,
+        )
 
     _grant(l1_user_id, seller_user_id, 'l1_commission', PROMO_COMMISSION_L1_X10,
            f'一级分佣·担保单#{order_no}')
@@ -3436,7 +4170,7 @@ def settle_monthly_promotion(conn, year_month_str):
 def serialize_manage_promotion_user_row(row):
     invited_count = int(row.get('invited_count') or 0)
     effective_invited_count = int(row.get('effective_invited_count') or 0)
-    reward_amount = int(row.get('total_reward_amount') or 0)
+    reward_amount = x10_to_amount(row.get('total_reward_amount_x10') or row.get('total_reward_amount') or 0)
     reward_count = int(row.get('reward_count') or 0)
     pending_invited_count = max(invited_count - effective_invited_count, 0)
     if reward_amount > 0:
@@ -3473,6 +4207,11 @@ def serialize_manage_promotion_user_row(row):
 
 
 def serialize_manage_promotion_reward_row(row):
+    reward_amount_x10 = int(
+        row.get('reward_amount_x10')
+        if row.get('reward_amount_x10') is not None
+        else to_x10_amount(row.get('reward_amount') or 0)
+    )
     return {
         'id': int(row.get('id') or 0),
         'userId': int(row.get('user_id') or 0),
@@ -3485,7 +4224,12 @@ def serialize_manage_promotion_reward_row(row):
         'inviteeBeastId': normalize_beast_id_value(row.get('invitee_beast_id')),
         'rewardType': row.get('reward_type') or 'milestone',
         'triggerThreshold': int(row.get('trigger_threshold') or 0),
-        'rewardAmount': int(row.get('reward_amount') or 0),
+        'rewardAmount': x10_to_amount(reward_amount_x10),
+        'rewardAmountX10': reward_amount_x10,
+        'orderNo': row.get('order_no') or '',
+        'flushedAmount': x10_to_amount(
+            int(row.get('flushed_amount_x10') or to_x10_amount(row.get('flushed_amount') or 0))
+        ),
         'remark': row.get('remark') or '',
         'createdTime': format_dt(row.get('created_at')),
     }
@@ -3543,8 +4287,9 @@ def list_user_promotion_invitees(conn, inviter_user_id, limit=20):
 def build_promotion_payload(conn, user_row, limit=20):
     user_id = int((user_row or {}).get('id') or 0)
     if user_id <= 0:
-        raise ValueError('缺少有效用户')
+        raise ValueError('??????')
     ensure_user_invite_code(conn, user_row)
+    safe_limit = max(1, min(100, int(limit or 20)))
     with conn.cursor() as cursor:
         cursor.execute('SELECT * FROM users WHERE id=%s LIMIT 1', (user_id,))
         latest_user = cursor.fetchone() or user_row
@@ -3561,37 +4306,33 @@ def build_promotion_payload(conn, user_row, limit=20):
         cursor.execute(
             """
             SELECT COUNT(*) AS reward_count,
-                   COALESCE(SUM(reward_amount), 0) AS reward_amount
-            FROM promotion_reward_logs
+                   COALESCE(SUM(reward_amount_x10), 0) AS reward_amount_x10
+            FROM promotion_commission_logs
             WHERE user_id=%s
             """,
             (user_id,)
         )
         reward_row = cursor.fetchone() or {}
         cursor.execute(
-            f'''
-            SELECT r.*, invitee.nick_name AS invitee_nick_name, invitee.beast_id AS invitee_beast_id
-            FROM promotion_reward_logs r
-            LEFT JOIN users invitee ON invitee.id = r.invitee_user_id
-            WHERE r.user_id=%s
-            ORDER BY r.created_at DESC, r.id DESC
-            LIMIT {max(1, min(100, int(limit or 20)))}
-            ''',
+            (
+                "SELECT r.*, invitee.nick_name AS invitee_nick_name, invitee.beast_id AS invitee_beast_id "
+                "FROM promotion_commission_logs r "
+                "LEFT JOIN users invitee ON invitee.id = r.invitee_user_id "
+                "WHERE r.user_id=%s "
+                "ORDER BY r.created_at DESC, r.id DESC "
+                f"LIMIT {safe_limit}"
+            ),
             (user_id,)
         )
         reward_rows = cursor.fetchall() or []
 
     invited_count = int(invited_row.get('invited_count') or 0)
     effective_invited_count = int(invited_row.get('effective_invited_count') or 0)
-    reward_amount = int(reward_row.get('reward_amount') or 0)
+    reward_amount = x10_to_amount(reward_row.get('reward_amount_x10') or 0)
     reward_count = int(reward_row.get('reward_count') or 0)
     rules = [
-        {'label': '一级分佣（直接邀请）', 'rewardDesc': '每单 +0.8 宝石'},
-        {'label': '二级分佣（间接邀请）', 'rewardDesc': '每单 +0.2 宝石'},
-        {'label': '新人首单奖励',         'rewardDesc': f'邀请人完成首单 +{PROMO_FIRST_ORDER_BONUS} 宝石'},
-        {'label': '月度阶梯（≥30单）',   'rewardDesc': '每单额外 +0.2 宝石，月末结算'},
-        {'label': '月度阶梯（≥100单）',  'rewardDesc': '每单额外 +0.3 宝石，月末结算'},
-        {'label': '全月 Top5',            'rewardDesc': '50/30/20/10/5 宝石，月末结算'},
+        {'label': '??????', 'rewardDesc': '?? +0.3 ???????????'},
+        {'label': '??????', 'rewardDesc': '?? +0.2 ???????????'},
     ]
     return {
         'user': serialize_user(latest_user),
@@ -3608,8 +4349,6 @@ def build_promotion_payload(conn, user_row, limit=20):
             'rewardLogs': [serialize_manage_promotion_reward_row(row) for row in reward_rows],
         },
     }
-
-
 
 def build_home_content_payload(conn):
     stored_payload, row = load_app_config_json(conn, HOME_CONTENT_CONFIG_KEY, default=normalize_home_content_payload())
@@ -3728,9 +4467,9 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
         LEFT JOIN (
             SELECT user_id,
                    COUNT(*) AS reward_count,
-                   COALESCE(SUM(reward_amount), 0) AS total_reward_amount,
+                   COALESCE(SUM(reward_amount_x10), 0) AS total_reward_amount_x10,
                    MAX(created_at) AS latest_reward_at
-            FROM promotion_reward_logs
+            FROM promotion_commission_logs
             GROUP BY user_id
         ) reward ON reward.user_id = u.id
         {where_sql}
@@ -3741,7 +4480,7 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
                COALESCE(inv.effective_invited_count, 0) AS effective_invited_count,
                inv.latest_invited_at,
                COALESCE(reward.reward_count, 0) AS reward_count,
-               COALESCE(reward.total_reward_amount, 0) AS total_reward_amount,
+               COALESCE(reward.total_reward_amount_x10, 0) AS total_reward_amount_x10,
                reward.latest_reward_at
         FROM users u
         LEFT JOIN (
@@ -3756,14 +4495,14 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
         LEFT JOIN (
             SELECT user_id,
                    COUNT(*) AS reward_count,
-                   COALESCE(SUM(reward_amount), 0) AS total_reward_amount,
+                   COALESCE(SUM(reward_amount_x10), 0) AS total_reward_amount_x10,
                    MAX(created_at) AS latest_reward_at
-            FROM promotion_reward_logs
+            FROM promotion_commission_logs
             GROUP BY user_id
         ) reward ON reward.user_id = u.id
         {where_sql}
         ORDER BY COALESCE(inv.effective_invited_count, 0) DESC,
-                 COALESCE(reward.total_reward_amount, 0) DESC,
+                 COALESCE(reward.total_reward_amount_x10, 0) DESC,
                  COALESCE(inv.invited_count, 0) DESC,
                  u.id DESC
         LIMIT {page_size} OFFSET {offset}
@@ -3783,7 +4522,7 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
                    user_u.invite_code AS user_invite_code,
                    invitee.nick_name AS invitee_nick_name,
                    invitee.beast_id AS invitee_beast_id
-            FROM promotion_reward_logs r
+            FROM promotion_commission_logs r
             LEFT JOIN users user_u ON user_u.id = r.user_id
             LEFT JOIN users invitee ON invitee.id = r.invitee_user_id
             ORDER BY r.created_at DESC, r.id DESC
@@ -3830,17 +4569,13 @@ def build_manage_promotion_payload(conn, query='', status='all', page=1, page_si
             'effectiveInvitees': effective_total,
             'pendingInvitees': max(invitee_total - effective_total, 0),
             'rewardCount': int(reward_summary.get('reward_count') or 0),
-            'totalRewardAmount': int(reward_summary.get('reward_amount') or 0),
+            'totalRewardAmount': x10_to_amount(reward_summary.get('reward_amount_x10') or 0),
             'recentEffectiveCount': int(recent_summary.get('recent_effective_count') or 0),
             'conversionRate': round((effective_total * 100 / invitee_total), 1) if invitee_total else 0,
         },
         'rules': [
-            {'label': '一级分佣（直接邀请）', 'rewardDesc': '每单 +0.8 宝石'},
-            {'label': '二级分佣（间接邀请）', 'rewardDesc': '每单 +0.2 宝石'},
-            {'label': '新人首单奖励',         'rewardDesc': f'邀请人完成首单 +{PROMO_FIRST_ORDER_BONUS} 宝石'},
-            {'label': '月度阶梯（≥30单）',   'rewardDesc': '每单额外 +0.2 宝石，月末结算'},
-            {'label': '月度阶梯（≥100单）',  'rewardDesc': '每单额外 +0.3 宝石，月末结算'},
-            {'label': '全月 Top5',            'rewardDesc': '50/30/20/10/5 宝石，月末结算'},
+            {'label': '直推永久分佣', 'rewardDesc': '每单 +0.3 宝石，担保完成后秒到账'},
+            {'label': '间推永久分佣', 'rewardDesc': '每单 +0.2 宝石，担保完成后秒到账'},
         ],
         'pagination': {
             'page': page,
@@ -3977,6 +4712,8 @@ def build_manage_feedback_payload(conn, query='', status='all', page=1, page_siz
     normalized_status = str(status or 'all').strip() or 'all'
     scoped_scene = normalize_feedback_scene(scene)
     scoped_type = normalize_feedback_type(feedback_type, scoped_scene) if (feedback_type or scoped_scene) else None
+    if scoped_scene == FEEDBACK_SCENE_ADMIN_LAYOUT and not (feedback_type or '').strip():
+        scoped_type = None
 
     conditions = []
     params = []
@@ -4039,6 +4776,8 @@ def build_manage_guarantee_payload(conn, query='', status='all', page=1, page_si
     keyword = str(query or '').strip()
     normalized_status = str(status or 'all').strip() or 'all'
 
+    apply_guarantee_matched_abandon_no_proof(conn)
+    apply_guarantee_auto_close(conn)
     apply_guarantee_auto_confirm(conn)
     settle_confirmed_guarantee_orders(conn)
 
@@ -4130,6 +4869,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
     oldest_text = oldest_date.strftime('%Y-%m-%d')
     latest_text = latest_date.strftime('%Y-%m-%d')
 
+    apply_guarantee_matched_abandon_no_proof(conn)
+    apply_guarantee_auto_close(conn)
     apply_guarantee_auto_confirm(conn)
     settle_confirmed_guarantee_orders(conn)
 
@@ -4137,15 +4878,15 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute('SELECT COUNT(*) AS total FROM users')
         user_count = int((cursor.fetchone() or {}).get('total') or 0)
 
-        cursor.execute('SELECT COALESCE(SUM(gem_balance), 0) AS total_balance, COALESCE(SUM(locked_gems), 0) AS total_locked FROM user_wallets')
+        cursor.execute('SELECT COALESCE(SUM(gem_balance_x10), 0) AS total_balance_x10, COALESCE(SUM(locked_gems_x10), 0) AS total_locked_x10 FROM user_wallets')
         wallet_summary = cursor.fetchone() or {}
 
-        cursor.execute("SELECT COALESCE(SUM(flushed_amount), 0) AS total FROM promotion_commission_logs")
+        cursor.execute("SELECT COALESCE(SUM(reward_amount_x10), 0) AS total_x10 FROM promotion_commission_logs")
         promo_reward_summary = cursor.fetchone() or {}
 
         cursor.execute("SELECT COALESCE(SUM(amount), 0) AS total_recharged FROM recharge_orders WHERE status='success'")
         plat_recharge = cursor.fetchone() or {}
-        cursor.execute("SELECT COALESCE(SUM(actual_amount), 0) AS total_transferred FROM gem_transfer_requests WHERE status=%s", (TRANSFER_REQUEST_STATUS_DONE,))
+        cursor.execute("SELECT COALESCE(SUM(actual_amount_x10), 0) AS total_transferred_x10 FROM gem_transfer_requests WHERE status=%s", (TRANSFER_REQUEST_STATUS_DONE,))
         plat_transfer = cursor.fetchone() or {}
 
         cursor.execute("SELECT COUNT(*) AS total_count, COALESCE(SUM(amount), 0) AS total_amount FROM recharge_orders WHERE status='success'")
@@ -4163,7 +4904,7 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM(fee_amount * 2), 0) AS total_fee_amount
+                   COALESCE(SUM(fee_amount_x10 * 2), 0) AS total_fee_amount_x10
             FROM guarantee_orders
             WHERE status=%s
             """,
@@ -4174,7 +4915,7 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM(fee_amount), 0) AS total_fee_amount
+                   COALESCE(SUM(fee_amount_x10), 0) AS total_fee_amount_x10
             FROM gem_transfer_requests
             WHERE status=%s
             """,
@@ -4198,8 +4939,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM(GREATEST(gem_amount - fee_amount, 0)), 0) AS total_amount,
-                   COALESCE(SUM(fee_amount * 2), 0) AS total_fee_amount
+                   COALESCE(SUM((gem_amount * 10) - fee_amount_x10, 0), 0) AS total_amount_x10,
+                   COALESCE(SUM(fee_amount_x10 * 2), 0) AS total_fee_amount_x10
             FROM guarantee_orders
             WHERE status=%s
               AND finished_at IS NOT NULL
@@ -4212,8 +4953,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM(actual_amount), 0) AS total_amount,
-                   COALESCE(SUM(fee_amount), 0) AS total_fee_amount
+                   COALESCE(SUM(actual_amount_x10), 0) AS total_amount_x10,
+                   COALESCE(SUM(fee_amount_x10), 0) AS total_fee_amount_x10
             FROM gem_transfer_requests
             WHERE status=%s
               AND processed_at IS NOT NULL
@@ -4402,8 +5143,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             '''
             SELECT DATE(finished_at) AS stat_date,
                    COUNT(*) AS transfer_count,
-                   COALESCE(SUM(GREATEST(gem_amount - fee_amount, 0)), 0) AS transfer_amount,
-                   COALESCE(SUM(fee_amount * 2), 0) AS fee_amount
+                   COALESCE(SUM(GREATEST((gem_amount * 10) - fee_amount_x10, 0)), 0) AS transfer_amount_x10,
+                   COALESCE(SUM(fee_amount_x10 * 2), 0) AS fee_amount_x10
             FROM guarantee_orders
             WHERE status=%s
               AND finished_at IS NOT NULL
@@ -4418,8 +5159,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             '''
             SELECT DATE(processed_at) AS stat_date,
                    COUNT(*) AS transfer_count,
-                   COALESCE(SUM(actual_amount), 0) AS transfer_amount,
-                   COALESCE(SUM(fee_amount), 0) AS fee_amount
+                   COALESCE(SUM(actual_amount_x10), 0) AS transfer_amount_x10,
+                   COALESCE(SUM(fee_amount_x10), 0) AS fee_amount_x10
             FROM gem_transfer_requests
             WHERE status=%s
               AND processed_at IS NOT NULL
@@ -4467,17 +5208,17 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         key = str(row.get('stat_date'))
         if key in daily_map:
             daily_map[key]['transferCount'] += int(row.get('transfer_count') or 0)
-            daily_map[key]['transferAmount'] += int(row.get('transfer_amount') or 0)
-            daily_map[key]['guaranteeFeeAmount'] += int(row.get('fee_amount') or 0)
-            daily_map[key]['platformFeeAmount'] += int(row.get('fee_amount') or 0)
+            daily_map[key]['transferAmount'] += x10_to_amount(row.get('transfer_amount_x10') or 0)
+            daily_map[key]['guaranteeFeeAmount'] += x10_to_amount(row.get('fee_amount_x10') or 0)
+            daily_map[key]['platformFeeAmount'] += x10_to_amount(row.get('fee_amount_x10') or 0)
 
     for row in transfer_request_done_rows:
         key = str(row.get('stat_date'))
         if key in daily_map:
             daily_map[key]['transferCount'] += int(row.get('transfer_count') or 0)
-            daily_map[key]['transferAmount'] += int(row.get('transfer_amount') or 0)
-            daily_map[key]['withdrawFeeAmount'] += int(row.get('fee_amount') or 0)
-            daily_map[key]['platformFeeAmount'] += int(row.get('fee_amount') or 0)
+            daily_map[key]['transferAmount'] += x10_to_amount(row.get('transfer_amount_x10') or 0)
+            daily_map[key]['withdrawFeeAmount'] += x10_to_amount(row.get('fee_amount_x10') or 0)
+            daily_map[key]['platformFeeAmount'] += x10_to_amount(row.get('fee_amount_x10') or 0)
 
     pending_transfer_count = int(pending_transfer.get('total_count') or 0)
     pending_withdraw_count = int(pending_withdraw.get('total_count') or 0)
@@ -4488,10 +5229,10 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         'rechargeCount': int(range_recharge.get('total_count') or 0),
         'rechargeAmount': int(range_recharge.get('total_amount') or 0),
         'transferCount': int(range_guarantee_transfer.get('total_count') or 0) + int(range_user_transfer.get('total_count') or 0),
-        'transferAmount': int(range_guarantee_transfer.get('total_amount') or 0) + int(range_user_transfer.get('total_amount') or 0),
-        'guaranteeFeeAmount': int(range_guarantee_transfer.get('total_fee_amount') or 0),
-        'withdrawFeeAmount': int(range_user_transfer.get('total_fee_amount') or 0),
-        'platformFeeAmount': int(range_guarantee_transfer.get('total_fee_amount') or 0) + int(range_user_transfer.get('total_fee_amount') or 0),
+        'transferAmount': x10_to_amount(range_guarantee_transfer.get('total_amount_x10') or 0) + x10_to_amount(range_user_transfer.get('total_amount_x10') or 0),
+        'guaranteeFeeAmount': x10_to_amount(range_guarantee_transfer.get('total_fee_amount_x10') or 0),
+        'withdrawFeeAmount': x10_to_amount(range_user_transfer.get('total_fee_amount_x10') or 0),
+        'platformFeeAmount': x10_to_amount(range_guarantee_transfer.get('total_fee_amount_x10') or 0) + x10_to_amount(range_user_transfer.get('total_fee_amount_x10') or 0),
         'feedbackCount': int(range_feedback.get('total_count') or 0),
     }
 
@@ -4503,8 +5244,8 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         },
         'totals': {
             'userCount': user_count,
-            'walletBalance': int(wallet_summary.get('total_balance') or 0),
-            'lockedGems': int(wallet_summary.get('total_locked') or 0),
+            'walletBalance': x10_to_amount(wallet_summary.get('total_balance_x10') or 0),
+            'lockedGems': x10_to_amount(wallet_summary.get('total_locked_x10') or 0),
             'totalRechargeCount': int(recharge_summary.get('total_count') or 0),
             'totalRechargeAmount': int(recharge_summary.get('total_amount') or 0),
             'rechargeRecordCount': int(recharge_record_summary.get('total_count') or 0),
@@ -4512,18 +5253,18 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
             'guaranteeRecordCount': int(guarantee_record_summary.get('total_count') or 0),
             'totalFeedbackCount': int(feedback_summary.get('total_count') or 0),
             'feedbackRecordCount': int(feedback_summary.get('total_count') or 0),
-            'totalGuaranteeFeeAmount': int(guarantee_fee_summary.get('total_fee_amount') or 0),
-            'totalWithdrawFeeAmount': int(transfer_fee_summary.get('total_fee_amount') or 0),
-            'totalPlatformFeeAmount': int(guarantee_fee_summary.get('total_fee_amount') or 0) + int(transfer_fee_summary.get('total_fee_amount') or 0),
+            'totalGuaranteeFeeAmount': x10_to_amount(guarantee_fee_summary.get('total_fee_amount_x10') or 0),
+            'totalWithdrawFeeAmount': x10_to_amount(transfer_fee_summary.get('total_fee_amount_x10') or 0),
+            'totalPlatformFeeAmount': x10_to_amount(guarantee_fee_summary.get('total_fee_amount_x10') or 0) + x10_to_amount(transfer_fee_summary.get('total_fee_amount_x10') or 0),
             'pendingTransferCount': pending_transfer_count,
             'pendingWithdrawCount': pending_withdraw_count,
             'pendingFeedbackCount': pending_feedback_count,
             'communityApplyPendingCount': pending_community_apply_count,
             'pendingActionCount': pending_transfer_count + pending_withdraw_count + pending_feedback_count + pending_community_apply_count,
-            'totalPromotionReward': int(promo_reward_summary.get('total') or 0),
+            'totalPromotionReward': x10_to_amount(promo_reward_summary.get('total_x10') or 0),
 
-            'platformAccountBalance': max(0, int(plat_recharge.get('total_recharged') or 0) - int(plat_transfer.get('total_transferred') or 0)),
-            'allUsersWalletBalance': int(wallet_summary.get('total_balance') or 0),
+            'platformAccountBalance': max(0, int(plat_recharge.get('total_recharged') or 0) - x10_to_amount(plat_transfer.get('total_transferred_x10') or 0)),
+            'allUsersWalletBalance': x10_to_amount(wallet_summary.get('total_balance_x10') or 0),
         },
         'snapshot': snapshot,
         'today': snapshot,

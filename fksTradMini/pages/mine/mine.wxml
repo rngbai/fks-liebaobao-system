@@ -72,7 +72,7 @@
           <text class="menu-icon">👤</text>
         </view>
         <text class="menu-text">个人设置</text>
-        <text class="menu-desc">头像 昵称 手机号 邮箱 密码</text>
+        <text class="menu-desc">头像 昵称 猎宝保ID 邮箱 密码</text>
         <text class="menu-arrow">›</text>
       </view>
       <view class="menu-item" bindtap="goGems">

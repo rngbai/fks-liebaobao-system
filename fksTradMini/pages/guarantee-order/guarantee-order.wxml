@@ -7,17 +7,22 @@
 
   <view wx:if="{{tab === 'create' && !orderId}}">
     <view class="balance-tip-bar">
-      <text class="bal-tip-txt">当前余额：<image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{gemBalance}} 宝石</text>
+      <view class="bal-tip-txt bal-tip-inline">
+        <text>当前余额：</text>
+        <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text> {{gemBalance}} 宝石</text>
+      </view>
       <text class="bal-tip-link" bindtap="goRecharge">转入 ›</text>
     </view>
 
 
     <view class="flow-card">
-      <view class="flow-title">📌 当前保单流程</view>
-      <text class="flow-step">1. 卖家发布保单并锁定宝石</text>
-      <text class="flow-step">2. 买家查询保单后填写自己的方块兽ID、昵称、交易说明并上传交易截图</text>
-      <text class="flow-step">3. 卖家核对截图与实际交易完成情况后点击确认，系统会自动把宝石发给买家</text>
-      <text class="flow-step">4. 若卖家 2 小时内未确认，系统会自动确认并给买家到账</text>
+      <view class="flow-title">📌 当前保单流程（与担保中心「规制流程」一致）</view>
+      <text class="flow-step">1. 卖家发布保单，锁定「约定返还 + 1 卖家手续费」</text>
+      <text class="flow-step">2. 买家查询保单，核对卖家信息后直接确认匹配（无需填写资料）</text>
+      <text class="flow-step">3. 买家去交换所按卖家ID找到挂单拍下，截图后返回上传凭证（须在 2 小时内完成，超时关单退卖家）</text>
+      <text class="flow-step">4. 卖家核对截图与游戏内订单后确认到账；若 2 小时内未确认，系统自动确认</text>
+      <text class="flow-step">5. 若 30 分钟内无人匹配，自动关单退款；卖家未匹配前可主动取消挂单</text>
     </view>
 
 
@@ -40,9 +45,17 @@
         </view>
       </view>
       <view class="form-item">
-        <view class="form-label required">保单标价宝石</view>
+        <view class="form-label required">约定返还买家宝石数</view>
         <view class="input-with-unit">
-          <input class="form-input" type="number" placeholder="买家匹配时看到的保单标价" value="{{gemAmount}}" bindinput="onGemInput" placeholder-style="color:#bbb" />
+          <input class="form-input" type="number" placeholder="与买家约定的到账宝石数" value="{{gemAmount}}" bindinput="onGemInput" placeholder-style="color:#bbb" />
+          <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
+        </view>
+        <text class="form-hint">卖家实际扣除 = 约定返还 + 1 宝石手续费</text>
+      </view>
+      <view class="form-item">
+        <view class="form-label">猎人交换所挂单宝石价（选填）</view>
+        <view class="input-with-unit">
+          <input class="form-input" type="number" placeholder="方便买家核对挂单价格" value="{{marketPrice}}" bindinput="onMarketPriceInput" placeholder-style="color:#bbb" />
           <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
         </view>
       </view>
@@ -58,20 +71,32 @@
 
       <view class="fee-detail" wx:if="{{gemAmount > 0}}">
         <view class="fee-row">
-          <text class="fee-key">保单标价</text>
-          <text class="fee-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{gemAmount}}</text>
+          <text class="fee-key">约定返还买家</text>
+          <view class="fee-val fee-green fee-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{gemAmount}}</text>
+          </view>
+        </view>
+        <view class="fee-row" wx:if="{{marketPrice > 0}}">
+          <text class="fee-key">交换所挂单参考价</text>
+          <view class="fee-val fee-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{marketPrice}}</text>
+          </view>
         </view>
         <view class="fee-row">
-          <text class="fee-key">卖家发布手续费</text>
-          <text class="fee-val fee-red"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> 1</text>
+          <text class="fee-key">卖家手续费</text>
+          <view class="fee-val fee-red fee-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>1</text>
+          </view>
         </view>
         <view class="fee-row">
           <text class="fee-key">买家到账手续费</text>
-          <text class="fee-val fee-red"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> 1</text>
-        </view>
-        <view class="fee-row">
-          <text class="fee-key">买家预计实收</text>
-          <text class="fee-val fee-green"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{gemAmount > 1 ? gemAmount - 1 : 0}}</text>
+          <view class="fee-val fee-red fee-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>1</text>
+          </view>
         </view>
         <view class="fee-row">
           <text class="fee-key">本次交易数量</text>
@@ -80,10 +105,19 @@
         <view class="fee-divider"></view>
         <view class="fee-row">
           <text class="fee-key total-key">卖家本次实际扣除</text>
-          <text class="fee-val total-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{gemAmount + 1}}</text>
+          <view class="fee-val total-val fee-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{gemAmount + 1}}</text>
+          </view>
         </view>
         <view class="balance-check" wx:if="{{gemBalance < gemAmount + 1}}">
-          <text class="balance-warn">⚠️ 余额不足，需 <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>{{gemAmount + 1}}，当前 <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>{{gemBalance}}</text>
+          <view class="balance-warn">
+            <text>⚠️ 余额不足，需 </text>
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{gemAmount + 1}}，当前 </text>
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{gemBalance}}</text>
+          </view>
           <text class="recharge-link" bindtap="goRecharge">去转入</text>
         </view>
 
@@ -100,7 +134,11 @@
       <view class="checkbox {{agreed ? 'checked' : ''}}">
         <text wx:if="{{agreed}}">✓</text>
       </view>
-      <text class="agree-text">我已了解：发布后将先锁定 <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>{{gemAmount > 0 ? gemAmount + 1 : 'N+1'}} 宝石；买家到账时平台还会再扣 1 宝石手续费，所以买家实收为 {{gemAmount > 1 ? gemAmount - 1 : 0}}。</text>
+      <view class="agree-text agree-text-inline">
+        <text>我已了解：我约定给买家 </text>
+        <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text>{{gemAmount > 0 ? gemAmount : 'N'}} 宝石，发布后先扣 {{gemAmount > 0 ? gemAmount + 1 : 'N+1'}} 宝石（含1卖家手续费）；买家到账时平台再扣 1 买家手续费，实收为 {{gemAmount > 1 ? gemAmount - 1 : 0}} 宝石。30 分钟内无人匹配自动关单退款；匹配后须在时限内上传截图、卖家须及时确认（详见担保中心规制协议）。</text>
+      </view>
 
 
     </view>
@@ -122,7 +160,7 @@
       <view class="summary-chip">{{orderDetail.trade_quantity}} 只</view>
       <view class="summary-chip">{{orderDetail.seller_game_id}}</view>
     </view>
-    <text class="created-tip">把保单号发给买家。买家匹配后，你还需要回到这里确认交易完成；系统会按保单标价结算，并在买家到账时自动扣除 1 宝石手续费。</text>
+    <text class="created-tip">把保单号发给买家。买家匹配后，你还需要回到这里确认交易完成；系统会按保单标价结算，并在买家到账时自动扣除 0.5 宝石手续费。</text>
 
 
     <view class="btn-primary created-copy-btn" bindtap="copyCreatedOrderId">复制保单号发给买家</view>
@@ -135,6 +173,10 @@
       <view class="query-desc">输入卖家提供的保单号，核对兽王、数量、卖家ID后再进行匹配。</view>
       <input class="query-input" placeholder="请输入保单号" value="{{queryId}}" bindinput="onQueryInput" placeholder-style="color:#bbb" />
       <view class="btn-primary query-btn" bindtap="searchOrder">查询保单</view>
+      <view wx:if="{{queryLoadFailed}}" class="query-fail-tip">
+        <text class="query-fail-icon">⚠️</text>
+        <text class="query-fail-text">网络异常，保单号已保留，点上方「查询保单」重试</text>
+      </view>
     </view>
   </view>
 
@@ -173,21 +215,40 @@
         <text class="detail-key">卖家地球猎人昵称</text>
         <text class="detail-val">{{orderDetail.seller_game_nick}}</text>
       </view>
+      <view class="detail-row" wx:if="{{orderDetail.market_price > 0}}">
+        <text class="detail-key">交换所挂单参考价</text>
+        <view class="detail-val detail-val-inline">
+          <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+          <text>{{orderDetail.market_price}}</text>
+        </view>
+      </view>
       <view class="detail-row">
-        <text class="detail-key">保单标价</text>
-        <text class="detail-val gem-text"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.gem_amount}}</text>
+        <text class="detail-key">约定返还买家宝石</text>
+        <view class="detail-val gem-text detail-val-inline">
+          <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+          <text>{{orderDetail.gem_amount}}</text>
+        </view>
       </view>
       <view class="detail-row">
         <text class="detail-key">卖家实扣</text>
-        <text class="detail-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.seller_total_cost}}</text>
+        <view class="detail-val detail-val-inline">
+          <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+          <text>{{orderDetail.seller_total_cost}}</text>
+        </view>
       </view>
       <view class="detail-row">
         <text class="detail-key">买家到账手续费</text>
-        <text class="detail-val fee-red"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.buyer_fee_amount}}</text>
+        <view class="detail-val fee-red detail-val-inline">
+          <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+          <text>{{orderDetail.buyer_fee_amount}}</text>
+        </view>
       </view>
       <view class="detail-row">
         <text class="detail-key">买家实收</text>
-        <text class="detail-val buyer-receive"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.actual_receive}}</text>
+        <view class="detail-val buyer-receive detail-val-inline">
+          <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+          <text>{{orderDetail.actual_receive}}</text>
+        </view>
       </view>
 
       <view class="detail-row" wx:if="{{orderDetail.buyer_beast_id}}">
@@ -275,50 +336,64 @@
     </view>
 
     <view class="buyer-action-card" wx:if="{{orderDetail.status === 0 && isBuyer}}">
-      <view class="buyer-action-title">📝 买家匹配确认</view>
-      <view class="buyer-action-desc">请核对卖家地球猎人ID与兽王信息无误后，再填写你的方块兽资料、交易说明并上传截图凭证。</view>
-      <view class="buyer-info-grid">
-        <view class="form-item">
-          <view class="form-label required">您的方块兽ID</view>
-          <input class="form-input bg-input" placeholder="请输入您的方块兽ID" value="{{buyerBeastId}}" bindinput="onBuyerIdInput" placeholder-style="color:#bbb" />
+      <view class="buyer-action-title">📝 确认匹配信息</view>
+      <view class="buyer-action-desc">请仔细核对以下卖家信息，确认无误后点击「确认匹配」。匹配后你将收到卖家地球猎人 ID，去交换所找到对应挂单拍下，再回来上传截图即可。</view>
+      <view class="buyer-seller-info-box">
+        <view class="buyer-seller-info-row">
+          <text class="bsi-label">兽王类型</text>
+          <text class="bsi-val">{{orderDetail.pet_name}}</text>
         </view>
-        <view class="form-item">
-          <view class="form-label required">您的昵称</view>
-          <input class="form-input bg-input" placeholder="请输入您的昵称" value="{{buyerBeastNick}}" bindinput="onBuyerNickInput" placeholder-style="color:#bbb" />
+        <view class="buyer-seller-info-row">
+          <text class="bsi-label">交易数量</text>
+          <text class="bsi-val">{{orderDetail.trade_quantity}} 只</text>
         </view>
-        <view class="form-item">
-          <view class="form-label">交易说明（可选）</view>
-          <textarea class="textarea-input" placeholder="可填写你拍下的说明、订单时间等，方便卖家核对" value="{{buyerTradeNote}}" bindinput="onBuyerTradeNoteInput" maxlength="255" placeholder-style="color:#bbb;font-size:26rpx" />
-        </view>
-        <view class="form-item">
-          <view class="form-label required">交易截图</view>
-          <text class="proof-upload-tip">请上传你在地球猎人APP拍下后的截图，卖家会结合截图和实际订单进行核对。</text>
-          <view class="proof-upload-area" bindtap="chooseBuyerProof" wx:if="{{!buyerProofImage && !buyerProofPreviewImage}}">
-
-            <text class="proof-upload-icon">📁</text>
-            <text class="proof-upload-title">点击上传交易截图</text>
-            <text class="proof-upload-sub">支持 JPG / PNG，建议上传压缩截图</text>
-          </view>
-          <view class="proof-preview-wrap" wx:else>
-            <image class="proof-preview-image" src="{{buyerProofPreviewImage || buyerProofImage}}" mode="aspectFill" bindtap="previewBuyerProof" data-url="{{buyerProofPreviewImage || buyerProofImage}}" />
-
-            <view class="proof-preview-actions">
-              <text class="proof-action-link" bindtap="chooseBuyerProof">重新上传</text>
-              <text class="proof-action-link danger" bindtap="removeBuyerProof">删除</text>
-            </view>
+        <view class="buyer-seller-info-row">
+          <text class="bsi-label">卖家地球猎人ID</text>
+          <view class="bsi-val-wrap">
+            <text class="bsi-val bsi-id">{{orderDetail.seller_game_id}}</text>
+            <view class="bsi-copy-btn" bindtap="copySellerGameId">复制ID</view>
           </view>
         </view>
+        <view class="buyer-seller-info-row">
+          <text class="bsi-label">卖家昵称</text>
+          <text class="bsi-val">{{orderDetail.seller_game_nick}}</text>
+        </view>
+        <view class="buyer-seller-info-row" wx:if="{{orderDetail.market_price > 0}}">
+          <text class="bsi-label">交换所挂单参考价</text>
+          <view class="bsi-val bsi-gem-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{orderDetail.market_price}}</text>
+          </view>
+        </view>
+        <view class="buyer-seller-info-row">
+          <text class="bsi-label">约定到账宝石</text>
+          <view class="bsi-val bsi-gem-inline bsi-highlight">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{orderDetail.actual_receive}}（扣1手续费后）</text>
+          </view>
+        </view>
+      </view>
+      <view class="buyer-action-flow-tip">
+        <text class="bat-step">① 点确认匹配 → ② 去交换所按卖家ID找到挂单拍下 → ③ 返回本页上传截图 → ④ 等待卖家确认到账</text>
       </view>
       <view class="btn-primary action-confirm-btn" bindtap="confirmMatch">确认匹配</view>
     </view>
 
     <view class="waiting-card" wx:if="{{orderDetail.status === 0 && !isBuyer}}">
       <text class="waiting-icon">⏳</text>
-      <text class="waiting-text">等待买家提交匹配信息</text>
-      <text class="waiting-desc">请把保单号发给买家，等待其填写方块兽资料、交易说明并上传截图。</text>
+      <text class="waiting-text">等待买家匹配</text>
+      <text class="waiting-desc">请把保单号发给买家，买家核对你的信息后直接确认匹配，无需填写资料。</text>
+      <text class="countdown-tip" wx:if="{{viewerRole === 'seller' && pendingExpireCountdown}}">无人匹配自动关单剩余 {{pendingExpireCountdown}}</text>
+      <view class="btn-outline seller-cancel-pending-btn" wx:if="{{viewerRole === 'seller'}}" bindtap="sellerCancelPending">取消挂单（宝石退回余额）</view>
     </view>
 
-    <view class="seller-confirm-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'seller' && !orderDetail.seller_confirmed}}">
+    <view class="seller-wait-proof-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'seller' && !orderDetail.seller_confirmed && !orderDetail.buyer_proof_image}}">
+      <text class="seller-wait-proof-title">⏳ 等待买家上传交易截图</text>
+      <text class="seller-wait-proof-desc">买家已匹配但尚未上传截图，你无法确认交易。请提醒对方在时限内完成上传。</text>
+      <text class="countdown-tip" wx:if="{{abandonProofCountdown}}">未上传截图自动关单剩余 {{abandonProofCountdown}}</text>
+    </view>
+
+    <view class="seller-confirm-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'seller' && !orderDetail.seller_confirmed && orderDetail.buyer_proof_image}}">
       <text class="seller-confirm-title">🔐 卖家二次确认</text>
       <text class="seller-confirm-desc">买家已提交匹配资料与截图。请你先回到地球猎人APP核对是否真实拍下，再回来确认。</text>
       <text class="seller-confirm-warning">谨防买家P图或使用旧截图骗确认。一旦你点确认，系统就会自动把这笔宝石发给买家。</text>
@@ -336,13 +411,48 @@
       <text class="appeal-reason" wx:if="{{orderDetail.admin_note}}">{{orderDetail.admin_note}}</text>
     </view>
 
+    <view class="waiting-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'guest' && !orderDetail.seller_confirmed}}">
+      <text class="waiting-icon">🕒</text>
+      <text class="waiting-text">保单处理中</text>
+      <text class="waiting-desc" wx:if="{{!orderDetail.buyer_proof_image}}">已有买家匹配，正在等待买家上传交易截图。</text>
+      <text class="waiting-desc" wx:else>买家已上传截图，正在等待卖家确认交易完成。</text>
+    </view>
 
-    <view class="waiting-card" wx:if="{{orderDetail.status === 1 && viewerRole !== 'seller' && !orderDetail.seller_confirmed}}">
+
+    <view class="buyer-matched-upload-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'buyer' && !orderDetail.seller_confirmed && !orderDetail.buyer_proof_image}}">
+      <text class="buyer-matched-upload-title">📷 上传交易截图</text>
+      <text class="buyer-matched-upload-desc">匹配成功！请去猎人交换所按下方卖家ID找到挂单并拍下，截图后回来上传凭证。</text>
+      <view class="matched-seller-id-row">
+        <text class="matched-seller-id-label">卖家地球猎人ID</text>
+        <view class="matched-seller-id-val-wrap">
+          <text class="matched-seller-id-val">{{orderDetail.seller_game_id}}</text>
+          <view class="bsi-copy-btn" bindtap="copySellerGameId">复制ID</view>
+        </view>
+      </view>
+      <text class="countdown-tip" wx:if="{{abandonProofCountdown}}">⏰ 截图上传剩余 {{abandonProofCountdown}}</text>
+      <view class="form-item" style="margin-top:16rpx">
+        <view class="proof-upload-area" bindtap="chooseBuyerProof" wx:if="{{!buyerProofImage && !buyerProofPreviewImage}}">
+          <text class="proof-upload-icon">📁</text>
+          <text class="proof-upload-title">点击上传交易截图</text>
+        </view>
+        <view class="proof-preview-wrap" wx:else>
+          <image class="proof-preview-image" src="{{buyerProofPreviewImage || buyerProofImage}}" mode="aspectFill" bindtap="previewBuyerProof" data-url="{{buyerProofPreviewImage || buyerProofImage}}" />
+          <view class="proof-preview-actions">
+            <text class="proof-action-link" bindtap="chooseBuyerProof">重新上传</text>
+            <text class="proof-action-link danger" bindtap="removeBuyerProof">删除</text>
+          </view>
+        </view>
+      </view>
+      <view class="btn-primary action-confirm-btn" bindtap="submitMatchedBuyerProof">提交截图</view>
+      <view class="btn-outline buyer-cancel-btn" style="margin-top:16rpx" bindtap="buyerCancelMatch">取消匹配（退出担保）</view>
+    </view>
+
+    <view class="waiting-card" wx:if="{{orderDetail.status === 1 && viewerRole === 'buyer' && !orderDetail.seller_confirmed && orderDetail.buyer_proof_image}}">
       <text class="waiting-icon">🕒</text>
       <text class="waiting-text">等待卖家确认交易完成</text>
-      <text class="waiting-desc">你已匹配成功，卖家核对无误后，系统会按保单标价扣除 1 宝石手续费，再把剩余宝石发到你的账户。</text>
-
+      <text class="waiting-desc">你已匹配成功，卖家核对无误后，系统会按保单标价扣除 0.5 宝石手续费，再把剩余宝石发到你的账户。</text>
       <text class="auto-confirm-tip" wx:if="{{orderDetail.auto_confirm_time}}">若卖家 2 小时内未确认，系统将于 {{orderDetail.auto_confirm_time}} 自动确认并给你到账。</text>
+      <view class="btn-outline buyer-cancel-btn" bindtap="buyerCancelMatch">取消匹配（退出担保）</view>
     </view>
 
 
@@ -357,8 +467,17 @@
     <view class="done-card" wx:if="{{orderDetail.status === 2}}">
       <text class="done-icon">✅</text>
       <text class="done-text">担保交易已完成</text>
-      <text class="done-desc"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.actual_receive}} 宝石已自动发放给买家（到账时扣除 {{orderDetail.buyer_fee_amount}} 宝石手续费）</text>
+      <view class="done-desc done-desc-inline done-desc-row">
+        <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+        <text>{{orderDetail.actual_receive}} 宝石已自动发放给买家（到账时扣除 {{orderDetail.buyer_fee_amount}} 宝石手续费）</text>
+      </view>
 
+    </view>
+
+    <view class="closed-card" wx:if="{{orderDetail.status === 4}}">
+      <text class="closed-icon">🔒</text>
+      <text class="closed-text">保单已关闭</text>
+      <text class="closed-desc">该保单已关闭，卖家锁定宝石已按规则退还（如超时未匹配、卖家取消挂单、买家取消匹配、匹配后未上传截图等）。</text>
     </view>
 
   </view>
@@ -378,21 +497,30 @@
           <text class="fee-modal-val">{{orderDetail.trade_quantity}} 只</text>
         </view>
         <view class="fee-modal-row">
-          <text>保单标价宝石</text>
-          <text class="fee-modal-val"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.gem_amount}}</text>
+          <text>约定返还宝石</text>
+          <view class="fee-modal-val fee-modal-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{orderDetail.gem_amount}}</text>
+          </view>
         </view>
         <view class="fee-modal-row">
           <text>买家到账手续费</text>
-          <text class="fee-modal-val fee-red"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.buyer_fee_amount}}</text>
+          <view class="fee-modal-val fee-red fee-modal-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{orderDetail.buyer_fee_amount}}</text>
+          </view>
         </view>
         <view class="fee-modal-row">
           <text>您预计实收</text>
-          <text class="fee-modal-val fee-green"><image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{orderDetail.actual_receive}}</text>
+          <view class="fee-modal-val fee-green fee-modal-val-inline">
+            <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
+            <text>{{orderDetail.actual_receive}}</text>
+          </view>
         </view>
 
         <view class="fee-modal-divider"></view>
-        <view class="fee-modal-note">确认后卖家会看到您的方块兽信息：<text class="fee-id">{{buyerBeastId}}</text> / <text class="fee-id">{{buyerBeastNick}}</text></view>
-        <view class="fee-modal-note">并同步看到您上传的交易截图，方便核对是否真实拍下。</view>
+        <view class="fee-modal-note">确认匹配后，请立即去猎人交换所按卖家ID「<text class="fee-id">{{orderDetail.seller_game_id}}</text>」找到挂单并拍下，再回来上传截图凭证。</view>
+        <view class="fee-modal-note">⏰ 匹配后须在 2 小时内上传截图，超时保单自动关闭、宝石退还卖家。</view>
       </view>
       <view class="fee-modal-btns">
         <view class="fee-modal-cancel" bindtap="closeFeeModal">取消</view>

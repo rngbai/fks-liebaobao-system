@@ -1,5 +1,10 @@
 export function formatNumber(value) {
-  return Number(value || 0).toLocaleString('zh-CN')
+  const numeric = Number(value || 0)
+  const maximumFractionDigits = Number.isInteger(numeric) ? 0 : 1
+  return numeric.toLocaleString('zh-CN', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits,
+  })
 }
 
 export function formatDateTime(value) {

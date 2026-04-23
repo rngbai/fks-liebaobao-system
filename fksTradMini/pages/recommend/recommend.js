@@ -1,6 +1,6 @@
 const { requestApi: sendRequest } = require('../../utils/request')
 
-const DEFAULT_HEADER_SUB = '推荐好友使用平台，好友首次有效交易后您获得奖励'
+const DEFAULT_HEADER_SUB = '推荐好友完成担保交易后，永久分佣会自动到账。'
 
 function normalizeRule(item = {}) {
   const min = Number(item.min || 0)
@@ -30,10 +30,8 @@ function normalizeInvitee(item = {}) {
 
 function createDefaultRules() {
   return [
-    { min: 1, max: 5, reward: 10, label: '首位有效推荐' },
-    { min: 6, max: 20, reward: 50, label: '达到 6 位有效推荐' },
-    { min: 21, max: 50, reward: 200, label: '达到 21 位有效推荐' },
-    { min: 51, max: null, reward: 600, label: '达到 51 位有效推荐' }
+    { min: 1, max: null, reward: 0.3, label: '直推每单奖励 0.3 宝石' },
+    { min: 1, max: null, reward: 0.2, label: '间推每单奖励 0.2 宝石' }
   ].map(normalizeRule)
 }
 

@@ -40,7 +40,7 @@
       </view>
       <view class="rank-side">
         <text class="rank-score">{{item.scoreText}}</text>
-        <text class="rank-reward">{{item.rewardText}}</text>
+        <text class="rank-reward" wx:if="{{item.rewardText}}">{{item.rewardText}}</text>
       </view>
     </view>
   </view>
