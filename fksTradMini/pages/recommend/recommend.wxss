@@ -24,6 +24,11 @@
 .rr-level { font-size: 26rpx; color: #666; }
 .rr-label { margin-top: 8rpx; font-size: 22rpx; color: #999; }
 .rr-reward { font-size: 26rpx; font-weight: 700; color: #8B5CF6; white-space: nowrap; }
+.bind-invite-box { margin-top: 16rpx; padding-top: 16rpx; border-top: 1rpx solid #f5f5f5; }
+.bind-invite-tip { display: block; font-size: 22rpx; line-height: 1.6; color: #999; }
+.bind-invite-row { display: flex; gap: 12rpx; align-items: center; margin-top: 16rpx; }
+.bind-invite-input { flex: 1; height: 76rpx; padding: 0 20rpx; border-radius: 14rpx; background: #F5F6FA; font-size: 26rpx; color: #333; }
+.bind-invite-btn { min-width: 144rpx; height: 76rpx; line-height: 76rpx; text-align: center; border-radius: 14rpx; background: linear-gradient(135deg,#5B6EF5,#8B5CF6); color: #fff; font-size: 24rpx; font-weight: 700; }
 .invited-section { margin: 20rpx 24rpx 0; }
 .invited-title { font-size: 28rpx; font-weight: 700; color: #222; margin-bottom: 16rpx; display: block; }
 .invited-list { background: #fff; border-radius: 16rpx; overflow: hidden; }

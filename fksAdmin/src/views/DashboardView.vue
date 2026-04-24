@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -636,6 +636,7 @@ const currentSectionCount = computed(() => formatNumber(countMap.value[currentSe
 const liveGemBalance = ref(null)       // null=未查 | number=已查
 const liveGemLoading = ref(false)
 const liveGemError = ref('')
+let liveGemAutoTimer = null
 
 async function fetchLiveGemBalance() {
   liveGemLoading.value = true
@@ -649,6 +650,23 @@ async function fetchLiveGemBalance() {
   } finally {
     liveGemLoading.value = false
   }
+}
+
+function stopLiveGemAutoRefresh() {
+  if (liveGemAutoTimer) {
+    clearInterval(liveGemAutoTimer)
+    liveGemAutoTimer = null
+  }
+}
+
+function startLiveGemAutoRefresh() {
+  stopLiveGemAutoRefresh()
+  if (activeModule.value !== 'overview') return
+  liveGemAutoTimer = setInterval(() => {
+    if (!liveGemLoading.value) {
+      fetchLiveGemBalance()
+    }
+  }, 60000)
 }
 
 const summaryCards = computed(() => [
@@ -1257,6 +1275,19 @@ onMounted(async () => {
     return
   }
   await loadDashboard()
+  await fetchLiveGemBalance()
+  startLiveGemAutoRefresh()
+})
+
+watch(activeModule, () => {
+  if (activeModule.value === 'overview') {
+    fetchLiveGemBalance()
+  }
+  startLiveGemAutoRefresh()
+})
+
+onBeforeUnmount(() => {
+  stopLiveGemAutoRefresh()
 })
 </script>
 

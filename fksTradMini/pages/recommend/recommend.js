@@ -45,6 +45,11 @@ Page({
     myRewardGem: 0,
     myCode: '',
     myCodeText: '生成中',
+    inviterUserId: 0,
+    inviterNickName: '',
+    inviterInviteCode: '',
+    canBindInviter: true,
+    bindInviteCode: '',
     rules: createDefaultRules(),
     invitedList: []
   },
@@ -90,6 +95,10 @@ Page({
         myRewardGem: Number(promotion.totalRewardAmount || 0),
         myCode: String(promotion.inviteCode || ''),
         myCodeText: String(promotion.inviteCode || '') || '生成中',
+        inviterUserId: Number(promotion.inviterUserId || 0),
+        inviterNickName: String(promotion.inviterNickName || ''),
+        inviterInviteCode: String(promotion.inviterInviteCode || ''),
+        canBindInviter: !!promotion.canBindInviter,
         rules,
         invitedList: Array.isArray(promotion.invitees) ? promotion.invitees.map(normalizeInvitee) : []
       })
@@ -108,6 +117,36 @@ Page({
     wx.setClipboardData({
       data: this.data.myCode,
       success: () => wx.showToast({ title: '推荐码已复制', icon: 'success' })
+    })
+  },
+
+  onBindInviteCodeInput(e) {
+    this.setData({ bindInviteCode: String(e.detail.value || '').trim().toUpperCase() })
+  },
+
+  bindInviter() {
+    const inviteCode = String(this.data.bindInviteCode || '').trim().toUpperCase()
+    if (!inviteCode) {
+      wx.showToast({ title: '请填写上级邀请码', icon: 'none' })
+      return
+    }
+    if (!this.data.canBindInviter) {
+      wx.showToast({ title: '已绑定上级邀请码，不能重复修改', icon: 'none' })
+      return
+    }
+    sendRequest({
+      url: '/api/promotion/bind',
+      method: 'POST',
+      data: { inviteCode },
+      showLoading: true,
+      loadingText: '绑定中...',
+      showError: false
+    }).then(() => {
+      wx.showToast({ title: '上级邀请码绑定成功', icon: 'success' })
+      this.setData({ bindInviteCode: '' })
+      this.loadPromotionData({ silent: true })
+    }).catch((error) => {
+      wx.showToast({ title: error.message || error || '绑定邀请码失败', icon: 'none' })
     })
   },
 

@@ -37,12 +37,34 @@
 
   <view class="reward-rule-card">
     <view class="rr-head">
+      <view class="rr-title">邀请关系</view>
+      <text class="rr-tip">分享链接自动绑定，也支持补绑一次</text>
+    </view>
+    <view class="rr-item">
+      <view>
+        <view class="rr-level">我的上级邀请码</view>
+        <view class="rr-label" wx:if="{{inviterInviteCode}}">{{inviterNickName || '已绑定上级'}} / {{inviterInviteCode}}</view>
+        <view class="rr-label" wx:else>当前未绑定上级邀请码</view>
+      </view>
+      <view class="rr-reward">{{inviterInviteCode ? '已绑定' : '未绑定'}}</view>
+    </view>
+    <view class="bind-invite-box" wx:if="{{canBindInviter}}">
+      <text class="bind-invite-tip">如果不是通过分享链接进入，可以在这里手动补绑一次上级邀请码。绑定成功后不可修改。</text>
+      <view class="bind-invite-row">
+        <input class="bind-invite-input" placeholder="请输入上级邀请码" value="{{bindInviteCode}}" bindinput="onBindInviteCodeInput" placeholder-style="color:#bbb"/>
+        <view class="bind-invite-btn" bindtap="bindInviter">立即绑定</view>
+      </view>
+    </view>
+  </view>
+
+  <view class="reward-rule-card">
+    <view class="rr-head">
       <view class="rr-title">奖励规则</view>
-      <text class="rr-tip">按有效推荐人数自动发奖</text>
+      <text class="rr-tip">担保完成后自动到账，无需月末结算</text>
     </view>
     <view class="rr-item" wx:for="{{rules}}" wx:key="index">
       <view>
-        <view class="rr-level">推荐 {{item.rangeText}} 人</view>
+        <view class="rr-level">永久分佣规则</view>
         <view class="rr-label" wx:if="{{item.label}}">{{item.label}}</view>
       </view>
       <view class="rr-reward">奖励 <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/> {{item.reward}} 宝石</view>

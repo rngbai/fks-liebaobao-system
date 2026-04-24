@@ -4287,12 +4287,17 @@ def list_user_promotion_invitees(conn, inviter_user_id, limit=20):
 def build_promotion_payload(conn, user_row, limit=20):
     user_id = int((user_row or {}).get('id') or 0)
     if user_id <= 0:
-        raise ValueError('??????')
+        raise ValueError('缺少有效用户')
     ensure_user_invite_code(conn, user_row)
     safe_limit = max(1, min(100, int(limit or 20)))
     with conn.cursor() as cursor:
         cursor.execute('SELECT * FROM users WHERE id=%s LIMIT 1', (user_id,))
         latest_user = cursor.fetchone() or user_row
+        inviter_user_id = int(latest_user.get('invited_by_user_id') or 0)
+        inviter_user = None
+        if inviter_user_id > 0:
+            cursor.execute('SELECT id, nick_name, invite_code FROM users WHERE id=%s LIMIT 1', (inviter_user_id,))
+            inviter_user = cursor.fetchone() or None
         cursor.execute(
             """
             SELECT COUNT(*) AS invited_count,
@@ -4339,6 +4344,10 @@ def build_promotion_payload(conn, user_row, limit=20):
         'promotion': {
             'inviteCode': latest_user.get('invite_code') or '',
             'sharePath': f"/pages/index/index?ref={latest_user.get('invite_code') or ''}",
+            'inviterUserId': inviter_user_id,
+            'inviterNickName': (inviter_user or {}).get('nick_name') or '',
+            'inviterInviteCode': (inviter_user or {}).get('invite_code') or '',
+            'canBindInviter': inviter_user_id <= 0,
             'totalInvited': invited_count,
             'effectiveInvited': effective_invited_count,
             'pendingInvited': max(invited_count - effective_invited_count, 0),
