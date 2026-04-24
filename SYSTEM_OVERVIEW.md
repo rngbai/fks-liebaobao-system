@@ -23,6 +23,13 @@
   - `fksapi/db_home.py`
   - `fksapi/db_promotion.py`
   - `fksapi/db_community.py`
+  - `fksapi/db_wallet.py`
+  - `fksapi/db_recharge.py`
+  - `fksapi/db_transfer.py`
+  - `fksapi/db_guarantee.py`
+  - `fksapi/db_feedback.py`
+  - `fksapi/db_config.py`
+  - `fksapi/db_manage.py`
 - 充值到账校验：`fksapi/select_rockLog.py`
 - CW 扫码/Token 工具：`fksapi/saomagetCwtk.py`
 - 后台 Token 管理面板：`fksAdmin/src/components/TokenManagePanel.vue`
@@ -91,4 +98,11 @@
 7. `fksapi/fastapi_shared.py`
 8. `fksapi/routers/public_api.py`
 9. `fksapi/routers/manage_api.py`
+10. `fksapi/db_wallet.py`
+11. `fksapi/db_recharge.py`
+12. `fksapi/db_transfer.py`
+13. `fksapi/db_guarantee.py`
+14. `fksapi/db_feedback.py`
+15. `fksapi/db_config.py`
+16. `fksapi/db_manage.py`
 

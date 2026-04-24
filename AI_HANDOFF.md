@@ -17,7 +17,14 @@
 7. `fksapi/db_home.py`
 8. `fksapi/db_promotion.py`
 9. `fksapi/db_community.py`
-10. `fksAdmin/src/views/DashboardView.vue`
+10. `fksapi/db_wallet.py`
+11. `fksapi/db_recharge.py`
+12. `fksapi/db_transfer.py`
+13. `fksapi/db_guarantee.py`
+14. `fksapi/db_feedback.py`
+15. `fksapi/db_config.py`
+16. `fksapi/db_manage.py`
+17. `fksAdmin/src/views/DashboardView.vue`
 
 ## 3. 关键规则（必须遵守）
 
