@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from env_bootstrap import load_local_env
+
+load_local_env()
+
 from config import token
 from db_mysql import (
     build_feedback_payload,
