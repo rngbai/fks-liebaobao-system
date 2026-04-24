@@ -228,7 +228,7 @@ Page({
     }).then(payload => {
       this.applyState(payload.data || {})
     }).catch(error => {
-      this.setData({ pageState: toErrorState(error.message || error || '??????????????') })
+      this.setData({ pageState: toErrorState(error.message || error || '转入状态同步失败，请稍后重试') })
     })
   },
 

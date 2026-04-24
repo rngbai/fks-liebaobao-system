@@ -18,7 +18,7 @@
 
     <view class="flow-card">
       <view class="flow-title">📌 当前保单流程（与担保中心「规制流程」一致）</view>
-      <text class="flow-step">1. 卖家发布保单，锁定「约定返还 + 1 卖家手续费」</text>
+      <text class="flow-step">1. 卖家发布保单，锁定「约定返还 + 0.5 卖家手续费」</text>
       <text class="flow-step">2. 买家查询保单，核对卖家信息后直接确认匹配（无需填写资料）</text>
       <text class="flow-step">3. 买家去交换所按卖家ID找到挂单拍下，截图后返回上传凭证（须在 2 小时内完成，超时关单退卖家）</text>
       <text class="flow-step">4. 卖家核对截图与游戏内订单后确认到账；若 2 小时内未确认，系统自动确认</text>
@@ -50,7 +50,7 @@
           <input class="form-input" type="number" placeholder="与买家约定的到账宝石数" value="{{gemAmount}}" bindinput="onGemInput" placeholder-style="color:#bbb" />
           <image class="unit-gem" src="/assets/baoshi.png" mode="aspectFit"/>
         </view>
-        <text class="form-hint">卖家实际扣除 = 约定返还 + 1 宝石手续费</text>
+        <text class="form-hint">卖家实际扣除 = 约定返还 + 0.5 宝石手续费</text>
       </view>
       <view class="form-item">
         <view class="form-label">猎人交换所挂单宝石价（选填）</view>
@@ -88,14 +88,14 @@
           <text class="fee-key">卖家手续费</text>
           <view class="fee-val fee-red fee-val-inline">
             <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
-            <text>1</text>
+            <text>0.5</text>
           </view>
         </view>
         <view class="fee-row">
           <text class="fee-key">买家到账手续费</text>
           <view class="fee-val fee-red fee-val-inline">
             <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
-            <text>1</text>
+            <text>0.5</text>
           </view>
         </view>
         <view class="fee-row">
@@ -107,14 +107,14 @@
           <text class="fee-key total-key">卖家本次实际扣除</text>
           <view class="fee-val total-val fee-val-inline">
             <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
-            <text>{{gemAmount + 1}}</text>
+            <text>{{gemAmount + 0.5}}</text>
           </view>
         </view>
-        <view class="balance-check" wx:if="{{gemBalance < gemAmount + 1}}">
+        <view class="balance-check" wx:if="{{gemBalance < gemAmount + 0.5}}">
           <view class="balance-warn">
             <text>⚠️ 余额不足，需 </text>
             <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
-            <text>{{gemAmount + 1}}，当前 </text>
+            <text>{{gemAmount + 0.5}}，当前 </text>
             <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
             <text>{{gemBalance}}</text>
           </view>
@@ -137,7 +137,7 @@
       <view class="agree-text agree-text-inline">
         <text>我已了解：我约定给买家 </text>
         <image class="gem-inline" src="/assets/baoshi.png" mode="aspectFit"/>
-        <text>{{gemAmount > 0 ? gemAmount : 'N'}} 宝石，发布后先扣 {{gemAmount > 0 ? gemAmount + 1 : 'N+1'}} 宝石（含1卖家手续费）；买家到账时平台再扣 1 买家手续费，实收为 {{gemAmount > 1 ? gemAmount - 1 : 0}} 宝石。30 分钟内无人匹配自动关单退款；匹配后须在时限内上传截图、卖家须及时确认（详见担保中心规制协议）。</text>
+        <text>{{gemAmount > 0 ? gemAmount : 'N'}} 宝石，发布后先扣 {{gemAmount > 0 ? gemAmount + 0.5 : 'N+0.5'}} 宝石（含 0.5 卖家手续费）；买家到账时平台再扣 0.5 买家手续费，实收为 {{gemAmount > 0 ? gemAmount - 0.5 : 0}} 宝石。30 分钟内无人匹配自动关单退款；匹配后须在时限内上传截图、卖家须及时确认（详见担保中心规制协议）。</text>
       </view>
 
 
@@ -459,7 +459,7 @@
     <view class="matched-card" wx:if="{{orderDetail.status === 1 && orderDetail.seller_confirmed}}">
       <text class="matched-icon">🚚</text>
       <text class="matched-text">卖家已确认，系统自动到账中</text>
-      <text class="matched-desc">系统正在按规则扣除 1 宝石买家手续费后，把剩余宝石发给买家，完成后会自动记录完成时间。</text>
+      <text class="matched-desc">系统正在按规则扣除 0.5 宝石买家手续费后，把剩余宝石发给买家，完成后会自动记录完成时间。</text>
 
     </view>
 

@@ -1,4 +1,4 @@
-import base64
+﻿import base64
 import binascii
 import json
 import logging
@@ -2006,3 +2006,4 @@ def run_server(host=HOST, port=PORT):
 
 if __name__ == '__main__':
     run_server()
+

@@ -536,7 +536,6 @@ function buildFeedbackDetail(item = {}, { fromQueue = false } = {}) {
 const dashboard = ref(createEmptyDashboard())
 const loading = ref(true)
 const refreshing = ref(false)
-const settlingMonth = ref(false)
 const activeModule = ref('overview')
 const drawerVisible = ref(false)
 const drawerDetail = ref(createDrawerDetail())
@@ -1234,40 +1233,6 @@ async function handleFeedbackSubmit({ item, status }) {
 }
 
 
-async function handleSettleMonth() {
-  let promptResult
-  const defaultMonth = new Date().toISOString().slice(0, 7)
-  try {
-    promptResult = await ElMessageBox.prompt(
-      '输入要结算的月份（格式 YYYY-MM）。每月只能结算一次，有幂等保护。',
-      '月度推广结算',
-      {
-        confirmButtonText: '确认结算',
-        cancelButtonText: '取消',
-        inputValue: defaultMonth,
-        inputPlaceholder: 'YYYY-MM',
-      }
-    )
-  } catch {
-    return
-  }
-  const yearMonth = String(promptResult.value || '').trim()
-  if (!/^\d{4}-\d{2}$/.test(yearMonth)) {
-    ElMessage.error('格式不正确，应为 YYYY-MM')
-    return
-  }
-  settlingMonth.value = true
-  try {
-    const res = await api.post('/api/manage/promotion/settle-monthly', { year_month: yearMonth })
-    ElMessage.success(res.message || `${yearMonth} 月结算完成，共 ${res.count ?? 0} 条`)
-    await loadDashboard({ silent: true })
-  } catch (e) {
-    ElMessage.error(e.message || '月度结算失败')
-  } finally {
-    settlingMonth.value = false
-  }
-}
-
 onMounted(async () => {
   const ok = await auth.authCheck()
   if (!ok) {
@@ -1379,13 +1344,7 @@ onBeforeUnmount(() => {
           </el-row>
 
           <div class="block-space settle-row">
-            <el-button
-              type="warning"
-              plain
-              :loading="settlingMonth"
-              @click="handleSettleMonth"
-            >月度推广结算</el-button>
-            <span class="settle-hint">每月末手动触发一次，发放阶梯分红和Top5奖励</span>
+            <span class="settle-hint">平台当前仅保留永久分佣规则，奖励会在担保完成后自动到账，无需手动结算。</span>
           </div>
 
           <el-row :gutter="16" class="block-space">

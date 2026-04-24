@@ -61,7 +61,7 @@ function resolveProofUploadedTime(item = {}) {
 function normalizeGuaranteeItem(item = {}) {
   const status = Number(item.statusIndex !== undefined ? item.statusIndex : item.status || 0)
   const gemAmount = Number(item.gem_amount !== undefined ? item.gem_amount : item.gemAmount || 0)
-  const feeAmount = Number(item.fee_amount !== undefined ? item.fee_amount : item.feeAmount || 1)
+  const feeAmount = Number(item.fee_amount !== undefined ? item.fee_amount : item.feeAmount || 0.5)
 
   return {
     id: item.id || item.orderNo || '',
@@ -76,6 +76,8 @@ function normalizeGuaranteeItem(item = {}) {
     total_fee_amount: Number(item.total_fee_amount !== undefined ? item.total_fee_amount : item.totalFeeAmount || feeAmount * 2),
     seller_total_cost: Number(item.seller_total_cost !== undefined ? item.seller_total_cost : item.sellerTotalCost || (gemAmount + feeAmount)),
     actual_receive: Number(item.actual_receive !== undefined ? item.actual_receive : item.actualReceive || Math.max(gemAmount - feeAmount, 0)),
+      market_price: Number(item.market_price !== undefined ? item.market_price : item.marketPrice || 0),
+    seller_nick_name: item.seller_nick_name || item.sellerNickName || '',
     buyer_beast_id: item.buyer_beast_id || item.buyerBeastId || '',
     buyer_beast_nick: item.buyer_beast_nick || item.buyerBeastNick || '',
     buyer_trade_note: item.buyer_trade_note || item.buyerTradeNote || '',
@@ -92,6 +94,10 @@ function normalizeGuaranteeItem(item = {}) {
     create_time: item.create_time || item.createTime || '',
     matched_time: item.matched_time || item.matchedTime || '',
     finished_time: item.finished_time || item.finishedTime || '',
+    expire_at_ms: Number(item.expire_at_ms !== undefined ? item.expire_at_ms : item.expireAtMs || 0),
+    abandon_proof_expire_at_ms: Number(
+      item.abandon_proof_expire_at_ms !== undefined ? item.abandon_proof_expire_at_ms : item.abandonProofExpireAtMs || 0
+    ),
     status
   }
 }

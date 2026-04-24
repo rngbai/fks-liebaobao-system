@@ -20,7 +20,7 @@
         <image class="gem-emoji" src="/assets/baoshi.png" mode="aspectFit"/>
         <text class="gem-balance-num">{{gemBalance}}</text>
       </view>
-      <text class="gem-balance-tip">卖家发布时需扣“挂单宝石 + 1”，买家到账时平台还会再扣 1 宝石手续费</text>
+      <text class="gem-balance-tip">卖家发布时需扣“挂单宝石 + 0.5”，买家到账时平台还会再扣 0.5 宝石手续费</text>
 
     </view>
     <view class="gem-recharge-btn" bindtap="goRecharge">转入宝石</view>

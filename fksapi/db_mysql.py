@@ -3147,20 +3147,20 @@ def build_pending_summary(conn, user_id):
 def complete_guarantee_transfer(conn, order_no, admin_note=''):
     order_row = find_guarantee_order_for_update(conn, order_no)
     if not order_row:
-        raise ValueError('??????')
+        raise ValueError('担保单不存在')
 
     current_status = order_row.get('status') or GUARANTEE_STATUS_PENDING
     if current_status == GUARANTEE_STATUS_DONE:
         return find_guarantee_order(conn, order_no)
     if current_status != GUARANTEE_STATUS_MATCHED:
-        raise ValueError('??????????????')
+        raise ValueError('当前担保单状态不支持完成结算')
     if not order_row.get('seller_confirmed_at'):
-        raise ValueError('??????????????????')
+        raise ValueError('卖家尚未确认交易完成')
 
     seller_user_id = int(order_row.get('seller_user_id') or 0)
     buyer_user_id = int(order_row.get('buyer_user_id') or 0)
     if buyer_user_id <= 0:
-        raise ValueError('?????????????????')
+        raise ValueError('当前担保单尚未匹配买家')
 
     gem_amount = int(order_row.get('gem_amount') or 0)
     fee_amount_x10 = get_row_amount_x10(order_row, 'fee_amount')
@@ -3176,7 +3176,7 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
     buyer_wallet = wallet_map[buyer_user_id]
     locked_before_x10 = get_row_amount_x10(seller_wallet, 'locked_gems')
     if locked_before_x10 < total_cost_x10:
-        raise ValueError('?????????????????????')
+        raise ValueError('卖家锁定宝石不足，无法完成结算')
 
     seller_balance_before_x10 = get_row_amount_x10(seller_wallet, 'gem_balance')
     buyer_balance_before_x10 = get_row_amount_x10(buyer_wallet, 'gem_balance')
@@ -3184,7 +3184,7 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
     buyer_fee_amount = x10_to_amount(int(order_row.get('buyer_fee_amount_x10') or fee_amount_x10 or 0))
     seller_fee_amount = x10_to_amount(int(order_row.get('seller_fee_amount_x10') or fee_amount_x10 or 0))
     final_admin_note = str(
-        admin_note or f'?????????? {actual_receive} ?????????? {x10_to_amount(fee_amount_x10)}?'
+        admin_note or f'系统已按规则给买家到账 {actual_receive} 宝石，买卖双方各扣 {x10_to_amount(fee_amount_x10)} 宝石手续费'
     ).strip()[:255]
 
     with conn.cursor() as cursor:
@@ -3205,7 +3205,7 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
             )
         )
         if cursor.rowcount <= 0:
-            raise ValueError('?????????????')
+            raise ValueError('担保单状态已变化，请刷新后重试')
         cursor.execute(
             '''
             UPDATE user_wallets
@@ -3253,7 +3253,7 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
         x10_to_amount(seller_balance_before_x10),
         'guarantee_order',
         order_no,
-        f'?????? #{order_no}???????? {actual_receive}????? {seller_fee_amount + buyer_fee_amount}?',
+        f'担保完成 #{order_no}，买家实收 {actual_receive} 宝石，平台总手续费 {seller_fee_amount + buyer_fee_amount} 宝石',
         change_amount_x10=0,
         balance_before_x10=seller_balance_before_x10,
         balance_after_x10=seller_balance_before_x10,
@@ -3269,7 +3269,7 @@ def complete_guarantee_transfer(conn, order_no, admin_note=''):
             x10_to_amount(buyer_balance_after_x10),
             'guarantee_order',
             order_no,
-            f'???? #{order_no}??? {actual_receive}???????? {buyer_fee_amount}?',
+            f'担保到账 #{order_no}，实收 {actual_receive} 宝石（已扣买家手续费 {buyer_fee_amount} 宝石）',
             change_amount_x10=actual_receive_x10,
             balance_before_x10=buyer_balance_before_x10,
             balance_after_x10=buyer_balance_after_x10,
@@ -4336,8 +4336,8 @@ def build_promotion_payload(conn, user_row, limit=20):
     reward_amount = x10_to_amount(reward_row.get('reward_amount_x10') or 0)
     reward_count = int(reward_row.get('reward_count') or 0)
     rules = [
-        {'label': '??????', 'rewardDesc': '?? +0.3 ???????????'},
-        {'label': '??????', 'rewardDesc': '?? +0.2 ???????????'},
+        {'label': '直推永久分佣', 'rewardDesc': '每单 +0.3 宝石，担保完成后秒到账'},
+        {'label': '间推永久分佣', 'rewardDesc': '每单 +0.2 宝石，担保完成后秒到账'},
     ]
     return {
         'user': serialize_user(latest_user),

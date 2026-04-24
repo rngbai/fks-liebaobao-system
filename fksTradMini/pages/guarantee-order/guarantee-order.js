@@ -1,4 +1,4 @@
-const { requestApi: sendRequest } = require('../../utils/request')
+﻿const { requestApi: sendRequest } = require('../../utils/request')
 const {
   normalizeGuaranteeItem: formatGuaranteeItem,
   resolveImageUrl: resolveGuaranteeImageUrl,
@@ -341,7 +341,7 @@ Page({
       sellerGameId.trim() &&
       sellerGameNick.trim() &&
       agreed &&
-      gemBalance >= gemAmount + 1
+      gemBalance >= gemAmount + 0.5
     )
     this.setData({ canCreate })
   },
@@ -688,3 +688,4 @@ Page({
     })
   }
 })
+
