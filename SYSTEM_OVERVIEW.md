@@ -4,17 +4,20 @@
 
 ## 1. 系统结构
 
-- `fksapi`：Python 后端（主 API、管理接口、数据库逻辑、文件上传）
+- `fksapi`：Python 后端（现已增加 FastAPI 入口，保留旧 HTTPServer 入口作为回滚兼容）
 - `fksAdmin`：Vue3 管理后台（运营、审核、推广、Token 管理）
 - `fksTradMini`：微信小程序（用户端）
 
 请求主链路：
 
-- 小程序/后台 -> `/api/*` -> `fksapi/recharge_verify_server.py` -> `fksapi/db_mysql.py`
+- 小程序/后台 -> `/api/*` -> `fksapi/fastapi_app.py` -> `fksapi/fastapi_service.py` / `fksapi/db_mysql.py`
 
 ## 2. 关键入口文件
 
-- 后端入口：`fksapi/recharge_verify_server.py`
+- 新后端入口：`fksapi/fastapi_server.py`
+- FastAPI 应用：`fksapi/fastapi_app.py`
+- FastAPI 业务服务层：`fksapi/fastapi_service.py`
+- 旧后端入口（兼容回滚）：`fksapi/recharge_verify_server.py`
 - 数据与业务核心：`fksapi/db_mysql.py`
 - 充值到账校验：`fksapi/select_rockLog.py`
 - CW 扫码/Token 工具：`fksapi/saomagetCwtk.py`

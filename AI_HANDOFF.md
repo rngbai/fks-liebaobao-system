@@ -4,14 +4,14 @@
 
 ## 1. 项目一句话
 
-这是一个“Python 后端 + Vue 管理后台 + 微信小程序”的交易担保系统，核心业务是充值校验、担保撮合、钱包记账与推广奖励。
+这是一个“FastAPI 后端 + Vue 管理后台 + 微信小程序”的交易担保系统，核心业务是充值校验、担保撮合、钱包记账与推广奖励。
 
 ## 2. 先读这 5 个文件（不要全仓扫描）
 
-1. `fksapi/recharge_verify_server.py`
-2. `fksapi/db_mysql.py`
-3. `fksapi/select_rockLog.py`
-4. `fksAdmin/src/components/TokenManagePanel.vue`
+1. `fksapi/fastapi_app.py`
+2. `fksapi/fastapi_service.py`
+3. `fksapi/db_mysql.py`
+4. `fksapi/select_rockLog.py`
 5. `fksAdmin/src/views/DashboardView.vue`
 
 ## 3. 关键规则（必须遵守）
@@ -30,12 +30,34 @@
 - 小程序目录：`fksTradMini`
 - 管理后台静态输出：`fksapi/admin/dist`
 
+## 4.1 固定连接信息（可直接用于部署）
+
+> 仅限本项目内部使用，避免每次重复向用户询问。
+
+- 服务器地址：`124.223.80.102`
+- SSH 用户：`root`
+- SSH 密码：`T9$xZ!4rW@7yU^2iO&5pQ*1sA`
+- GitHub 仓库：`https://github.com/rngbai/fks-liebaobao-system`
+- 默认分支：`main`
+- 服务器项目目录：`/root/fks_project`
+- 服务名：`fks`
+- 线上后台地址：`http://124.223.80.102/admin/`
+- 健康检查：`http://127.0.0.1:5000/api/recharge/health`
+
+## 4.2 AI 默认发布动作（标准顺序）
+
+1. 本地提交并推送：`git push origin main`
+2. 服务器拉取：`cd /root/fks_project && git pull origin main`
+3. 若包含 `fksAdmin` 改动：`cd /root/fks_project/fksAdmin && npm run build`
+4. 重启服务：`systemctl restart fks && systemctl is-active fks`
+5. 验证：`git log -1 --oneline`、健康检查、后台页面强刷
+
 ## 5. 本地开发常用命令
 
 ```bash
 # 后端
 cd fksapi
-python recharge_verify_server.py
+python fastapi_server.py
 
 # 后台前端
 cd fksAdmin
@@ -63,6 +85,21 @@ ssh root@<server_ip> /root/quick_deploy.sh
 4. 登录态是否失效（401）
 5. token 是否过期、tokenType 是否匹配
 
+## 7.1 近期高频坑位（优先检查）
+
+- Token 管理支持“部分更新”：
+  - `userId / userName / token / tokenType` 可单独修改
+  - 扫码成功后通常仅需手动补 `userName`
+- 扫码“实际成功但弹窗失败”：
+  - 重点检查前端状态判断，不要只看弹窗文案
+- 管理后台页面未更新：
+  - 优先判断是否漏 `npm run build`
+  - 检查 `fksapi/admin/dist/assets` 是否是最新时间
+- 反馈管理 SQL 报缺字段（如 `scene`）：
+  - 说明线上老库未升级；确认后端自动补列逻辑是否已执行
+- 服务器 `git pull` 偶发失败：
+  - 常见 443/TLS 网络抖动，默认做 2~3 次重试
+
 ## 8. 可直接粘贴给 AI 的提示词
 
 ```text
@@ -81,4 +118,3 @@ ssh root@<server_ip> /root/quick_deploy.sh
 注意：tokenType=cw 时必须使用 CW UA，tokenType=fks 使用 FKS UA。
 请只做最小改动，优先保证可回滚和可部署。
 ```
-

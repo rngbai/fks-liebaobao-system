@@ -8,24 +8,15 @@ Type=simple
 User=fks
 Group=fks
 WorkingDirectory=/opt/fks/fksapi
-
-# 从 .env 文件加载环境变量
 EnvironmentFile=/opt/fks/fksapi/.env
-
 ExecStart=/opt/fks/venv/bin/python fastapi_server.py
-
-# 进程崩溃自动重启，最多每 30s 重启一次
 Restart=on-failure
 RestartSec=5
 StartLimitIntervalSec=30
 StartLimitBurst=5
-
-# 安全加固
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/opt/fks/fksapi/uploads /opt/fks/fksapi/logs
-
-# 标准输出也写到 journal
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=fks-api-fastapi
