@@ -1,4 +1,4 @@
-﻿import base64
+import base64
 import binascii
 import json
 import logging
@@ -28,73 +28,66 @@ from urllib.parse import parse_qs, urlparse
 
 
 
+from api_runtime import DEFAULT_CANCEL_LIMIT, now_ms
 from config import token, userId
-from db_mysql import (
-    DEFAULT_CANCEL_LIMIT,
+from db_common import get_connection, get_or_create_user, init_database_and_tables
+from db_community import (
+    create_community_profile,
+    delete_community_profile,
+    list_community_profiles,
+    update_community_profile,
+)
+from db_config import (
+    build_game_config_payload,
+    get_live_game_credentials,
+    patch_game_config,
+    save_game_config,
+)
+from db_feedback import (
+    FEEDBACK_SCENE_ADMIN_LAYOUT,
     FEEDBACK_SCENE_COMMUNITY_APPLY,
     approve_community_feedback,
-    bind_user_inviter,
     build_feedback_payload,
-
+    create_feedback,
+    serialize_feedback_row,
+    serialize_manage_feedback_row,
+    update_feedback_status,
+)
+from db_guarantee import (
+    build_pending_summary,
+    buyer_cancel_guarantee_match,
+    buyer_upload_guarantee_proof,
+    create_guarantee_order,
+    find_guarantee_order,
+    list_guarantee_orders,
+    list_public_guarantee_orders,
+    match_guarantee_order,
+    seller_cancel_pending_guarantee_order,
+    seller_confirm_guarantee_order,
+    seller_reject_guarantee_order,
+    serialize_guarantee_row,
+)
+from db_home import (
     build_home_content_payload,
+    build_manage_home_content_payload,
+    save_manage_home_content_payload,
+)
+from db_manage import (
     build_manage_dashboard,
     build_manage_feedback_payload,
     build_manage_guarantee_payload,
-    build_manage_home_content_payload,
     build_manage_promotion_payload,
     build_manage_recharge_payload,
     build_manage_transfer_request_payload,
     build_manage_users_payload,
-    build_game_config_payload,
-    build_pending_summary,
-    build_promotion_payload,
-    build_recharge_state,
-    get_live_game_credentials,
-    patch_game_config,
-    save_game_config,
-    list_community_profiles,
-    create_community_profile,
-    update_community_profile,
-    delete_community_profile,
-    settle_monthly_promotion,
-
-    build_transfer_state,
-    build_user_stats,
-    cancel_recharge_order,
-    complete_transfer_request,
-    reject_transfer_request,
-
-    create_feedback,
-
-    create_guarantee_order,
-    create_recharge_order,
-    create_transfer_request,
-    find_guarantee_order,
+    delete_user_account,
     import_manage_users,
     update_user_status,
-    delete_user_account,
-    list_public_guarantee_orders,
-    seller_confirm_guarantee_order,
-    seller_reject_guarantee_order,
-
-    find_recharge_order,
-    get_connection,
-    get_or_create_user,
-    init_database_and_tables,
-    list_guarantee_orders,
-    list_wallet_records,
-    mark_recharge_success,
-    match_guarantee_order,
-    now_ms,
-    serialize_feedback_row,
-    serialize_guarantee_row,
-    serialize_manage_feedback_row,
-    serialize_transfer_request,
-    serialize_user,
-    serialize_wallet,
-    save_manage_home_content_payload,
-    update_feedback_status,
 )
+from db_promotion import bind_user_inviter, build_promotion_payload, settle_monthly_promotion
+from db_recharge import build_recharge_state, cancel_recharge_order, create_recharge_order, find_recharge_order, mark_recharge_success
+from db_transfer import build_transfer_state, complete_transfer_request, create_transfer_request, reject_transfer_request, serialize_transfer_request
+from db_wallet import build_user_stats, list_wallet_records, serialize_user, serialize_wallet
 
 
 
@@ -351,6 +344,26 @@ except (TypeError, ValueError):
     DASHBOARD_CACHE_TTL_SECONDS = 8
 _DASHBOARD_CACHE = {}
 _DASHBOARD_CACHE_LOCK = threading.Lock()
+
+# 公开保单列表缓存：10 秒内直接返回缓存，减少 DB 压力
+_PUBLIC_ORDERS_CACHE = {}
+_PUBLIC_ORDERS_CACHE_TTL = 10  # 秒
+_PUBLIC_ORDERS_CACHE_LOCK = threading.Lock()
+
+def _get_public_orders_cache(key):
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        entry = _PUBLIC_ORDERS_CACHE.get(key)
+        if entry and time.time() < entry['exp']:
+            return entry['data']
+        return None
+
+def _set_public_orders_cache(key, data):
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        _PUBLIC_ORDERS_CACHE[key] = {'data': data, 'exp': time.time() + _PUBLIC_ORDERS_CACHE_TTL}
+
+def _clear_public_orders_cache():
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        _PUBLIC_ORDERS_CACHE.clear()
 
 
 
@@ -1049,10 +1062,16 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
         if parsed.path == '/api/guarantee/public':
             limit = max(1, to_int(params.get('limit', ['20'])[0], 20))
             pet_name = str(params.get('pet_name', [''])[0] or '').strip() or None
+            cache_key = f'{limit}:{pet_name}'
+            cached = _get_public_orders_cache(cache_key)
+            if cached is not None:
+                build_json(self, 200, ok({'orders': cached}, '查询成功'))
+                return
             try:
                 with get_connection(autocommit=False) as conn:
                     orders = list_public_guarantee_orders(conn, limit=limit, pet_name=pet_name)
                     conn.commit()
+                _set_public_orders_cache(cache_key, orders)
                 build_json(self, 200, ok({'orders': orders}, '查询成功'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'读取公开保单失败: {exc}'})
@@ -1371,6 +1390,8 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         if parsed.path != '/api/manage/login':
             clear_dashboard_cache()
+            # 任何写操作都清掉公开保单缓存，确保用户看到最新数据
+            _clear_public_orders_cache()
         try:
             payload = self.read_json_body()
 
@@ -1670,6 +1691,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
 
         if parsed.path == '/api/guarantee/create':
             gem_amount = to_int(payload.get('gem_amount') or payload.get('amount'), 0)
+            market_price = to_int(payload.get('market_price') or payload.get('marketPrice'), 0)
             remark = str(payload.get('remark') or '').strip()
             pet_name = str(payload.get('pet_name') or payload.get('petName') or '').strip()
             trade_quantity = max(1, to_int(payload.get('trade_quantity') or payload.get('tradeQuantity'), 1))
@@ -1688,6 +1710,7 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                         trade_quantity=trade_quantity,
                         seller_game_id=seller_game_id,
                         seller_game_nick=seller_game_nick,
+                        market_price=market_price,
                     )
                     wallet_row = get_or_create_user(conn, user_key, profile)[1]
                     conn.commit()
@@ -1794,6 +1817,76 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
                 }, '已拒绝确认，订单已进入申诉状态，等待后台人工仲裁'))
             except Exception as exc:
                 build_json(self, 500, {'ok': False, 'message': f'拒绝确认失败: {exc}'})
+            return
+
+        if parsed.path == '/api/guarantee/buyer-cancel-match':
+            order_no = str(payload.get('order_no') or payload.get('orderId') or '').strip()
+            if not order_no:
+                build_json(self, 200, {'ok': False, 'message': '缺少担保单号'})
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    buyer_user_row, _ = get_or_create_user(conn, user_key, profile)
+                    order_row = buyer_cancel_guarantee_match(conn, order_no, buyer_user_row)
+                    conn.commit()
+                build_json(self, 200, ok({
+                    'order': serialize_guarantee_row(order_row),
+                    'viewerRole': 'guest',
+                    'canMatch': True,
+                }, '已取消匹配，保单重新开放'))
+            except PermissionError as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'取消匹配失败: {exc}'})
+            return
+
+        if parsed.path == '/api/guarantee/seller-cancel-pending':
+            order_no = str(payload.get('order_no') or payload.get('orderId') or '').strip()
+            if not order_no:
+                build_json(self, 200, {'ok': False, 'message': '缺少担保单号'})
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    seller_user_row, _ = get_or_create_user(conn, user_key, profile)
+                    order_row = seller_cancel_pending_guarantee_order(conn, order_no, seller_user_row)
+                    wallet_row = get_or_create_user(conn, user_key, profile)[1]
+                    conn.commit()
+                build_json(self, 200, ok({
+                    'order': serialize_guarantee_row(order_row),
+                    'wallet': serialize_wallet(wallet_row),
+                    'viewerRole': 'seller',
+                    'canMatch': False,
+                }, '已取消挂单，锁定宝石已退还'))
+            except PermissionError as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            except ValueError as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'取消挂单失败: {exc}'})
+            return
+
+        if parsed.path == '/api/guarantee/buyer-upload-proof':
+            order_no = str(payload.get('order_no') or payload.get('orderId') or '').strip()
+            buyer_proof_image = str(payload.get('buyer_proof_image') or payload.get('buyerProofImage') or '').strip()
+            if not order_no:
+                build_json(self, 200, {'ok': False, 'message': '缺少担保单号'})
+                return
+            try:
+                with get_connection(autocommit=False) as conn:
+                    buyer_user_row, _ = get_or_create_user(conn, user_key, profile)
+                    order_row = buyer_upload_guarantee_proof(conn, order_no, buyer_user_row, buyer_proof_image=buyer_proof_image)
+                    conn.commit()
+                build_json(self, 200, ok({
+                    'order': serialize_guarantee_row(order_row),
+                    'viewerRole': 'buyer',
+                    'canMatch': False,
+                }, '交易截图已提交'))
+            except PermissionError as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            except ValueError as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            except Exception as exc:
+                build_json(self, 500, {'ok': False, 'message': f'上传截图失败: {exc}'})
             return
 
         if parsed.path == '/api/manage/transfer-request/complete':
@@ -1925,20 +2018,43 @@ class RechargeVerifyHandler(BaseHTTPRequestHandler):
             return
 
 
+        if parsed.path == '/api/manage/layout-feedback':
+            if not self.ensure_admin():
+                return
+            title = str(payload.get('title') or '').strip()
+            content = str(payload.get('content') or '').strip()
+            contact = str(payload.get('contact') or '').strip()
+            page_url = str(payload.get('page_url') or payload.get('pageUrl') or '').strip()
+            feedback_type = str(payload.get('type') or payload.get('feedback_type') or '网址排版').strip()[:32] or '网址排版'
+            if page_url:
+                content = f'页面/位置：{page_url}\n\n{content}'
+            ops_user_key = 'ops_layout_feedback_bot'
+            profile = {'nickName': '后台排版登记', 'account': 'layout-ops'}
+            try:
+                with get_connection(autocommit=False) as conn:
+                    user_row, _ = get_or_create_user(conn, ops_user_key, profile)
+                    feedback_row = create_feedback(
+                        conn,
+                        user_row,
+                        feedback_type,
+                        title,
+                        content,
+                        contact=contact,
+                        scene=FEEDBACK_SCENE_ADMIN_LAYOUT,
+                    )
+                    conn.commit()
+                build_json(self, 200, ok({'feedback': serialize_manage_feedback_row(feedback_row)}, '已记录排版问题'))
+            except Exception as exc:
+                build_json(self, 200, {'ok': False, 'message': str(exc)})
+            return
+
         if parsed.path == '/api/manage/promotion/settle-monthly':
             if not self.ensure_admin():
                 return
-            year_month = str(payload.get('year_month') or '').strip()
-            if not year_month:
-                build_json(self, 200, {'ok': False, 'message': '请传 year_month，格式 YYYY-MM'})
-                return
-            try:
-                with get_connection() as conn:
-                    results = settle_monthly_promotion(conn, year_month)
-                build_json(self, 200, ok({'results': results, 'count': len(results)},
-                                         f'{year_month} 月度推广结算完成，共 {len(results)} 条'))
-            except Exception as exc:
-                build_json(self, 500, {'ok': False, 'message': f'月度结算失败: {exc}'})
+            build_json(self, 200, {
+                'ok': False,
+                'message': '月度结算入口已停用，当前平台仅保留永久分佣规则，奖励会在担保完成后自动到账'
+            })
             return
 
         if parsed.path == '/api/manage/guarantee-transfer':
@@ -1986,7 +2102,7 @@ def _check_required_env():
     errors = []
     if not ADMIN_PASSWORD:
         errors.append('FKS_ADMIN_PASSWORD 未设置（不允许空密码运行）')
-    from db_mysql import DB_PASSWORD
+    from db_common import DB_PASSWORD
     if not DB_PASSWORD:
         errors.append('MYSQL_PASSWORD 未设置')
     if errors:
@@ -1995,10 +2111,20 @@ def _check_required_env():
         raise SystemExit('请在 .env 或环境变量中设置上述必需配置后再启动。')
 
 
+class FKSHTTPServer(ThreadingHTTPServer):
+    # Python 默认 request_queue_size=5，在并发请求下会导致连接被 OS 丢弃
+    # 提高到 256，让更多请求可以排队等待处理而不是直接被拒绝
+    request_queue_size = 256
+    # 允许快速重用地址（重启时不等待 TIME_WAIT）
+    allow_reuse_address = True
+    # 守护线程，进程退出时不等待请求处理完成
+    daemon_threads = True
+
+
 def run_server(host=HOST, port=PORT):
     _check_required_env()
     init_database_and_tables()
-    server = ThreadingHTTPServer((host, port), RechargeVerifyHandler)
+    server = FKSHTTPServer((host, port), RechargeVerifyHandler)
     logger.info(f'recharge verify server listening on http://{host}:{port}')
     logger.info(f'log dir: {LOG_DIR}')
     server.serve_forever()
@@ -2006,4 +2132,3 @@ def run_server(host=HOST, port=PORT):
 
 if __name__ == '__main__':
     run_server()
-
