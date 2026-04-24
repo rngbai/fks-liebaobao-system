@@ -10,21 +10,24 @@
 
 1. `fksapi/fastapi_app.py`
 2. `fksapi/fastapi_shared.py`
-3. `fksapi/routers/public_api.py`
-4. `fksapi/routers/manage_api.py`
-5. `fksapi/fastapi_service.py`
-6. `fksapi/db_mysql.py`
-7. `fksapi/db_home.py`
-8. `fksapi/db_promotion.py`
-9. `fksapi/db_community.py`
-10. `fksapi/db_wallet.py`
-11. `fksapi/db_recharge.py`
-12. `fksapi/db_transfer.py`
-13. `fksapi/db_guarantee.py`
-14. `fksapi/db_feedback.py`
-15. `fksapi/db_config.py`
-16. `fksapi/db_manage.py`
-17. `fksAdmin/src/views/DashboardView.vue`
+3. `fksapi/api_runtime.py`
+4. `fksapi/api_game.py`
+5. `fksapi/db_common.py`
+6. `fksapi/routers/public_api.py`
+7. `fksapi/routers/manage_api.py`
+8. `fksapi/fastapi_service.py`
+9. `fksapi/db_mysql.py`
+10. `fksapi/db_home.py`
+11. `fksapi/db_promotion.py`
+12. `fksapi/db_community.py`
+13. `fksapi/db_wallet.py`
+14. `fksapi/db_recharge.py`
+15. `fksapi/db_transfer.py`
+16. `fksapi/db_guarantee.py`
+17. `fksapi/db_feedback.py`
+18. `fksapi/db_config.py`
+19. `fksapi/db_manage.py`
+20. `fksAdmin/src/views/DashboardView.vue`
 
 ## 3. 关键规则（必须遵守）
 

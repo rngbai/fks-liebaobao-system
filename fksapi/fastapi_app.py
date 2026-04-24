@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from db_mysql import init_database_and_tables
+from db_common import init_database_and_tables
 from fastapi_shared import _check_required_env, clear_dashboard_cache, clear_public_orders_cache, fail_payload
 from routers import manage_router, public_router
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
+from db_common import get_connection, get_or_create_user, now_ms
 from db_community import list_community_profiles
 from db_feedback import create_feedback, serialize_feedback_row
 from db_guarantee import (
@@ -29,11 +30,7 @@ from db_recharge import (
 )
 from db_transfer import build_transfer_state, create_transfer_request, serialize_transfer_request
 from db_wallet import serialize_wallet
-from db_mysql import (
-    FEEDBACK_SCENE_COMMUNITY_APPLY,
-    get_connection,
-    get_or_create_user,
-)
+from db_feedback import FEEDBACK_SCENE_COMMUNITY_APPLY
 from api_game import fetch_live_gem_balance, qr_fetch_image, qr_fetch_uuid, qr_poll_and_login, QR_LOCK, QR_SESSIONS, QR_SESSION_TTL
 from api_runtime import (
     DEFAULT_CANCEL_LIMIT,

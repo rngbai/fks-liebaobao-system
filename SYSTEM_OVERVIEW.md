@@ -17,6 +17,10 @@
 - 新后端入口：`fksapi/fastapi_server.py`
 - FastAPI 应用：`fksapi/fastapi_app.py`
 - FastAPI 业务服务层：`fksapi/fastapi_service.py`
+- FastAPI 共享运行时：`fksapi/api_runtime.py`
+- FastAPI 游戏接口辅助：`fksapi/api_game.py`
+- FastAPI 公共依赖层：`fksapi/fastapi_shared.py`
+- FastAPI 基础 DB 层：`fksapi/db_common.py`
 - 旧后端入口（兼容回滚）：`fksapi/recharge_verify_server.py`
 - 数据与业务核心：`fksapi/db_mysql.py`
 - 已拆出的业务域：
@@ -96,13 +100,16 @@
 
 6. `fksapi/fastapi_app.py`
 7. `fksapi/fastapi_shared.py`
-8. `fksapi/routers/public_api.py`
-9. `fksapi/routers/manage_api.py`
-10. `fksapi/db_wallet.py`
-11. `fksapi/db_recharge.py`
-12. `fksapi/db_transfer.py`
-13. `fksapi/db_guarantee.py`
-14. `fksapi/db_feedback.py`
-15. `fksapi/db_config.py`
-16. `fksapi/db_manage.py`
+8. `fksapi/api_runtime.py`
+9. `fksapi/api_game.py`
+10. `fksapi/db_common.py`
+11. `fksapi/routers/public_api.py`
+12. `fksapi/routers/manage_api.py`
+13. `fksapi/db_wallet.py`
+14. `fksapi/db_recharge.py`
+15. `fksapi/db_transfer.py`
+16. `fksapi/db_guarantee.py`
+17. `fksapi/db_feedback.py`
+18. `fksapi/db_config.py`
+19. `fksapi/db_manage.py`
 
