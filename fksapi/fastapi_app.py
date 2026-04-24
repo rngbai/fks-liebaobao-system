@@ -8,6 +8,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from env_bootstrap import load_local_env
+
+load_local_env()
+
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -76,8 +80,6 @@ from recharge_verify_server import (
     ADMIN_USERNAME,
     DEFAULT_CANCEL_LIMIT,
     DEFAULT_VERIFY_MINUTES,
-    HOST,
-    LOG_DIR,
     PORT,
     RECEIVER_BEAST_ID,
     RECEIVER_BEAST_NICK,
@@ -85,25 +87,20 @@ from recharge_verify_server import (
     _QR_SESSION_TTL,
     _QR_SESSIONS,
     _check_required_env,
-    _clear_public_orders_cache,
     _fetch_live_gem_balance,
-    _get_public_orders_cache,
     _qr_fetch_image,
     _qr_fetch_uuid,
     _qr_poll_and_login,
-    _set_public_orders_cache,
     check_user_active,
     cleanup_admin_sessions,
     clear_dashboard_cache,
     create_admin_session,
     get_admin_session_record,
     get_cached_dashboard_payload,
-    get_request_scheme,
     load_admin_asset,
     load_upload_asset,
     logger,
     make_profile,
-    parse_dashboard_date_text,
     resolve_dashboard_date_range,
     revoke_admin_session,
     set_cached_dashboard_payload,
@@ -114,6 +111,27 @@ from select_rockLog import TokenExpiredError, fetch_recent_sell_logs, verify_rec
 
 
 service = FastAPIService()
+_PUBLIC_ORDERS_CACHE: dict[str, dict[str, Any]] = {}
+_PUBLIC_ORDERS_CACHE_TTL = 10
+_PUBLIC_ORDERS_CACHE_LOCK = threading.Lock()
+
+
+def get_public_orders_cache(key: str):
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        entry = _PUBLIC_ORDERS_CACHE.get(key)
+        if entry and time.time() < entry["exp"]:
+            return entry["data"]
+        return None
+
+
+def set_public_orders_cache(key: str, data: Any) -> None:
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        _PUBLIC_ORDERS_CACHE[key] = {"data": data, "exp": time.time() + _PUBLIC_ORDERS_CACHE_TTL}
+
+
+def clear_public_orders_cache() -> None:
+    with _PUBLIC_ORDERS_CACHE_LOCK:
+        _PUBLIC_ORDERS_CACHE.clear()
 
 
 def ok_payload(data: Any = None, message: str = "success") -> dict[str, Any]:
@@ -224,7 +242,7 @@ app.add_middleware(
 async def invalidate_caches_on_write(request: Request, call_next):
     if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"} and request.url.path != "/api/manage/login":
         clear_dashboard_cache()
-        _clear_public_orders_cache()
+        clear_public_orders_cache()
     return await call_next(request)
 
 
@@ -435,14 +453,14 @@ def guarantee_public(limit: int = Query(20), pet_name: str | None = Query(None))
     limit = max(1, limit)
     pet_name = str(pet_name or "").strip() or None
     cache_key = f"{limit}:{pet_name}"
-    cached = _get_public_orders_cache(cache_key)
+    cached = get_public_orders_cache(cache_key)
     if cached is not None:
         return ok_payload({"orders": cached}, "查询成功")
     try:
         with get_connection(autocommit=False) as conn:
             orders = list_public_guarantee_orders(conn, limit=limit, pet_name=pet_name)
             conn.commit()
-        _set_public_orders_cache(cache_key, orders)
+        set_public_orders_cache(cache_key, orders)
         return ok_payload({"orders": orders}, "查询成功")
     except Exception as exc:
         return json_bytes_response(500, fail_payload(f"读取公开保单失败: {exc}"))
