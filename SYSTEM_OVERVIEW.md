@@ -19,6 +19,10 @@
 - FastAPI 业务服务层：`fksapi/fastapi_service.py`
 - 旧后端入口（兼容回滚）：`fksapi/recharge_verify_server.py`
 - 数据与业务核心：`fksapi/db_mysql.py`
+- 已拆出的业务域：
+  - `fksapi/db_home.py`
+  - `fksapi/db_promotion.py`
+  - `fksapi/db_community.py`
 - 充值到账校验：`fksapi/select_rockLog.py`
 - CW 扫码/Token 工具：`fksapi/saomagetCwtk.py`
 - 后台 Token 管理面板：`fksAdmin/src/components/TokenManagePanel.vue`
@@ -80,4 +84,11 @@
 3. `fksapi/select_rockLog.py`
 4. `fksAdmin/src/components/TokenManagePanel.vue`
 5. `fksAdmin/src/views/DashboardView.vue`
+
+如果要继续维护 FastAPI 结构，建议优先补读：
+
+6. `fksapi/fastapi_app.py`
+7. `fksapi/fastapi_shared.py`
+8. `fksapi/routers/public_api.py`
+9. `fksapi/routers/manage_api.py`
 

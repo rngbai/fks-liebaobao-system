@@ -7,10 +7,10 @@ from env_bootstrap import load_local_env
 load_local_env()
 
 from config import token
+from db_home import build_home_content_payload
+from db_promotion import build_promotion_payload
 from db_mysql import (
     build_feedback_payload,
-    build_home_content_payload,
-    build_promotion_payload,
     build_recharge_state,
     build_transfer_state,
     build_user_stats,

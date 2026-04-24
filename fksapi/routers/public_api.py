@@ -3,6 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse, Response
 
+from db_community import list_community_profiles
+from db_promotion import bind_user_inviter, build_promotion_payload
 from db_mysql import (
     FEEDBACK_SCENE_COMMUNITY_APPLY,
     build_pending_summary,
@@ -14,7 +16,6 @@ from db_mysql import (
     find_recharge_order,
     get_connection,
     get_or_create_user,
-    list_community_profiles,
     list_public_guarantee_orders,
     mark_recharge_success,
     match_guarantee_order,

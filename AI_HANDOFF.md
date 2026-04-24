@@ -9,10 +9,15 @@
 ## 2. 先读这 5 个文件（不要全仓扫描）
 
 1. `fksapi/fastapi_app.py`
-2. `fksapi/fastapi_service.py`
-3. `fksapi/db_mysql.py`
-4. `fksapi/select_rockLog.py`
-5. `fksAdmin/src/views/DashboardView.vue`
+2. `fksapi/fastapi_shared.py`
+3. `fksapi/routers/public_api.py`
+4. `fksapi/routers/manage_api.py`
+5. `fksapi/fastapi_service.py`
+6. `fksapi/db_mysql.py`
+7. `fksapi/db_home.py`
+8. `fksapi/db_promotion.py`
+9. `fksapi/db_community.py`
+10. `fksAdmin/src/views/DashboardView.vue`
 
 ## 3. 关键规则（必须遵守）
 
