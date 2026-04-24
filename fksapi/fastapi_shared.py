@@ -13,39 +13,21 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from fastapi_service import FastAPIService
-from recharge_verify_server import (
+from api_runtime import (
     ADMIN_USERNAME,
     PORT,
     _check_required_env,
     clear_dashboard_cache,
+    clear_public_orders_cache,
     cleanup_admin_sessions,
     create_admin_session,
+    get_public_orders_cache,
     get_admin_session_record,
     revoke_admin_session,
+    set_public_orders_cache,
 )
 
 service = FastAPIService()
-_PUBLIC_ORDERS_CACHE: dict[str, dict[str, Any]] = {}
-_PUBLIC_ORDERS_CACHE_TTL = 10
-_PUBLIC_ORDERS_CACHE_LOCK = threading.Lock()
-
-
-def get_public_orders_cache(key: str):
-    with _PUBLIC_ORDERS_CACHE_LOCK:
-        entry = _PUBLIC_ORDERS_CACHE.get(key)
-        if entry and time.time() < entry["exp"]:
-            return entry["data"]
-        return None
-
-
-def set_public_orders_cache(key: str, data: Any) -> None:
-    with _PUBLIC_ORDERS_CACHE_LOCK:
-        _PUBLIC_ORDERS_CACHE[key] = {"data": data, "exp": time.time() + _PUBLIC_ORDERS_CACHE_TTL}
-
-
-def clear_public_orders_cache() -> None:
-    with _PUBLIC_ORDERS_CACHE_LOCK:
-        _PUBLIC_ORDERS_CACHE.clear()
 
 
 def ok_payload(data: Any = None, message: str = "success") -> dict[str, Any]:

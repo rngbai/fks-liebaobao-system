@@ -40,6 +40,20 @@ from db_mysql import (
     update_user_status,
     delete_user_account,
 )
+from api_game import QR_LOCK, QR_SESSIONS, QR_SESSION_TTL, fetch_live_gem_balance, qr_fetch_image, qr_fetch_uuid, qr_poll_and_login
+from api_runtime import (
+    ADMIN_USERNAME,
+    RECEIVER_BEAST_ID,
+    RECEIVER_BEAST_NICK,
+    get_cached_dashboard_payload,
+    logger,
+    make_profile,
+    now_ms,
+    resolve_dashboard_date_range,
+    set_cached_dashboard_payload,
+    to_int,
+    verify_admin_login,
+)
 from fastapi_shared import (
     create_admin_session,
     fail_payload,
@@ -50,27 +64,6 @@ from fastapi_shared import (
     require_admin,
     revoke_admin_session,
     service,
-)
-from recharge_verify_server import (
-    ADMIN_USERNAME,
-    DEFAULT_CANCEL_LIMIT,
-    RECEIVER_BEAST_ID,
-    RECEIVER_BEAST_NICK,
-    _QR_LOCK,
-    _QR_SESSION_TTL,
-    _QR_SESSIONS,
-    _fetch_live_gem_balance,
-    _qr_fetch_image,
-    _qr_fetch_uuid,
-    _qr_poll_and_login,
-    get_cached_dashboard_payload,
-    logger,
-    make_profile,
-    now_ms,
-    resolve_dashboard_date_range,
-    set_cached_dashboard_payload,
-    to_int,
-    verify_admin_login,
 )
 
 manage_router = APIRouter()
@@ -288,7 +281,7 @@ def manage_gem_balance(_: dict = Depends(require_admin)):
             conn.commit()
         if not uid or not tk:
             return fail_payload("游戏凭证未配置，请先在 Token 管理中设置")
-        balance = _fetch_live_gem_balance(uid, tk, tk_type)
+        balance = fetch_live_gem_balance(uid, tk, tk_type)
         if balance is None:
             return fail_payload("Token 已失效或游戏接口异常，请刷新 Token")
         return ok_payload(
@@ -309,8 +302,8 @@ def manage_gem_balance(_: dict = Depends(require_admin)):
 def manage_qr_status(request: Request, session: str = Query(""), _: dict = Depends(require_admin)):
     if not session:
         return JSONResponse(status_code=400, content=fail_payload("缺少 session 参数"))
-    with _QR_LOCK:
-        sess = _QR_SESSIONS.get(session)
+    with QR_LOCK:
+        sess = QR_SESSIONS.get(session)
     if not sess:
         return JSONResponse(status_code=404, content=fail_payload("会话不存在或已过期"))
     status = sess.get("status", "waiting")
@@ -319,16 +312,16 @@ def manage_qr_status(request: Request, session: str = Query(""), _: dict = Depen
             with get_connection(autocommit=False) as conn:
                 cfg = save_game_config(conn, sess["userId"], sess["token"], token_type="cw")
                 conn.commit()
-            with _QR_LOCK:
-                _QR_SESSIONS.pop(session, None)
+            with QR_LOCK:
+                QR_SESSIONS.pop(session, None)
             return ok_payload({**cfg, "autoSaved": True}, "扫码登录成功，凭证已自动保存")
         except Exception as exc:
             return json_bytes_response(500, fail_payload(f"保存凭证失败: {exc}"))
     if status == "error":
         return fail_payload(sess.get("error", "登录失败"))
     if status == "timeout":
-        with _QR_LOCK:
-            _QR_SESSIONS.pop(session, None)
+        with QR_LOCK:
+            QR_SESSIONS.pop(session, None)
         return fail_payload("二维码已过期")
     return ok_payload({"status": "waiting"}, "等待扫码")
 
@@ -538,27 +531,27 @@ async def manage_token_config_save(request: Request, _: dict = Depends(require_a
 @manage_router.post("/api/manage/token-config/qr-start")
 async def manage_token_qr_start(_: dict = Depends(require_admin)):
     try:
-        q_uuid = _qr_fetch_uuid()
-        img_bytes = _qr_fetch_image(q_uuid)
+        q_uuid = qr_fetch_uuid()
+        img_bytes = qr_fetch_image(q_uuid)
         img_b64 = base64.b64encode(img_bytes).decode()
         session_id = __import__("secrets").token_urlsafe(16)
-        expires_at = time.time() + _QR_SESSION_TTL
-        with _QR_LOCK:
+        expires_at = time.time() + QR_SESSION_TTL
+        with QR_LOCK:
             now_ts = time.time()
-            for sid in list(_QR_SESSIONS.keys()):
-                if _QR_SESSIONS[sid].get("expires_at", 0) < now_ts:
-                    _QR_SESSIONS.pop(sid, None)
-            _QR_SESSIONS[session_id] = {
+            for sid in list(QR_SESSIONS.keys()):
+                if QR_SESSIONS[sid].get("expires_at", 0) < now_ts:
+                    QR_SESSIONS.pop(sid, None)
+            QR_SESSIONS[session_id] = {
                 "status": "waiting",
                 "qrUuid": q_uuid,
                 "expires_at": expires_at,
             }
-        threading.Thread(target=_qr_poll_and_login, args=(session_id, q_uuid), daemon=True).start()
+        threading.Thread(target=qr_poll_and_login, args=(session_id, q_uuid), daemon=True).start()
         return ok_payload(
             {
                 "sessionId": session_id,
                 "qrImage": f"data:image/jpeg;base64,{img_b64}",
-                "expiresIn": _QR_SESSION_TTL,
+                "expiresIn": QR_SESSION_TTL,
             },
             "二维码已生成",
         )
