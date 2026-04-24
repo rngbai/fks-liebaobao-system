@@ -4939,7 +4939,7 @@ def build_manage_dashboard(conn, days=7, limit=20, start_date=None, end_date=Non
         cursor.execute(
             """
             SELECT COUNT(*) AS total_count,
-                   COALESCE(SUM((gem_amount * 10) - fee_amount_x10, 0), 0) AS total_amount_x10,
+                   COALESCE(SUM(GREATEST((gem_amount * 10) - fee_amount_x10, 0)), 0) AS total_amount_x10,
                    COALESCE(SUM(fee_amount_x10 * 2), 0) AS total_fee_amount_x10
             FROM guarantee_orders
             WHERE status=%s
