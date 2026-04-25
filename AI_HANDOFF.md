@@ -114,6 +114,12 @@ ssh root@<server_ip> /root/quick_deploy.sh
   - 说明线上老库未升级；确认后端自动补列逻辑是否已执行
 - 服务器 `git pull` 偶发失败：
   - 常见 443/TLS 网络抖动，默认做 2~3 次重试
+- 小程序 `fksTradMini/pages/community` 社区名流板块切换体验：
+  - 不要把分类切换拆成多次 `setData`；先算好目标 `activeCat / activeSub / activeListKey / currentList / currentListKey / pageState`，再一次性原子更新，避免中间出现列表空帧。
+  - 顶部分类区域尽量用常驻结构 + `hidden` 控制显示，不要用 `wx:if / wx:elif` 在“大咖团队长 / 普通二级分类 / 空二级分类”之间频繁销毁重建。
+  - 切换时优先使用本地/全局缓存立即展示，后台静默刷新；不要因为缓存过 60 秒就先清空 `currentList` 等接口回来。
+  - 板块切换不要叠加 `scroll-with-animation`、列表入场 `translateY`、按压缩放等动画；小程序逻辑层到视图层更新本身有开销，动画叠加会产生卡顿感。
+  - tabBar 图标规格要统一，社区图标使用 `images/tabbar/shequ_normal.png` 和 `images/tabbar/shequ_selected.png`，保持 `96x96`，不要再直接用 `images/shequ.png`。
 
 ## 8. 可直接粘贴给 AI 的提示词
 

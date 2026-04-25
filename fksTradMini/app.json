@@ -49,8 +49,8 @@
       {
         "pagePath": "pages/community/community",
         "text": "社区",
-        "iconPath": "images/shequ.png",
-        "selectedIconPath": "images/shequ.png"
+        "iconPath": "images/tabbar/shequ_normal.png",
+        "selectedIconPath": "images/tabbar/shequ_selected.png"
       },
       {
         "pagePath": "pages/mine/mine",

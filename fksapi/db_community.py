@@ -1,9 +1,19 @@
 from db_mysql import *  # compatibility re-export source for extracted domain functions
 
+def _normalize_upload_url(value):
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    marker = '/uploads/'
+    if marker in text:
+        return marker + text.split(marker, 1)[1].lstrip('/')
+    return text
+
 def _serialize_profile(row):
     if not row:
         return None
     r = dict(row)
+    r['avatar_url'] = _normalize_upload_url(r.get('avatar_url'))
     r['is_active'] = bool(r.get('is_active', 1))
     r['created_at'] = format_dt(r.get('created_at'))
     r['updated_at'] = format_dt(r.get('updated_at'))

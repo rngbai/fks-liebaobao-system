@@ -12,6 +12,12 @@ function getBaseUrl() {
 function resolveImageUrl(imageUrl = '') {
   const rawUrl = String(imageUrl || '').trim()
   if (!rawUrl) return ''
+  const uploadIndex = rawUrl.indexOf('/uploads/')
+  if (uploadIndex >= 0) {
+    const uploadPath = rawUrl.slice(uploadIndex)
+    const baseUrl = getBaseUrl()
+    return baseUrl ? `${baseUrl}${uploadPath}` : uploadPath
+  }
   if (/^(https?:)?\/\//i.test(rawUrl) || /^wxfile:\/\//i.test(rawUrl) || /^data:/i.test(rawUrl)) {
     return rawUrl
   }

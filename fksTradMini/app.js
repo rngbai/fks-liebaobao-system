@@ -1,6 +1,7 @@
 const DEFAULT_BASE_URL = 'https://liebaobao.site'
 const API_BASE_URL_STORAGE = 'api_base_url'
 const USER_KEY_STORAGE = 'local_user_key_v1'
+const COMMUNITY_PREFETCH_MAX_AGE = 60000
 
 const {
   classifyRequestError,
@@ -75,6 +76,8 @@ App({
     loadingCount: 0,
     pendingCommunityRoute: null,
     requestToastState: {},
+    communityProfilesCache: null,
+    communityProfilesPending: null,
   },
 
   onLaunch() {
@@ -90,6 +93,10 @@ App({
       success: () => {},
       fail: () => {},
     })
+
+    setTimeout(() => {
+      this.prefetchCommunityProfiles().catch(() => {})
+    }, 300)
   },
 
   normalizeBaseUrl(baseUrl) {
@@ -141,6 +148,52 @@ App({
       ...header,
       ...extraHeader,
     }
+  },
+
+  getCommunityProfilesCache(maxAge = COMMUNITY_PREFETCH_MAX_AGE) {
+    const cache = this.globalData.communityProfilesCache
+    if (!cache || !Array.isArray(cache.list) || !cache.ts) return null
+    if (Date.now() - Number(cache.ts || 0) > maxAge) return null
+    return cache
+  },
+
+  setCommunityProfilesCache(list = []) {
+    const cache = {
+      list: Array.isArray(list) ? list : [],
+      ts: Date.now(),
+    }
+    this.globalData.communityProfilesCache = cache
+    return cache
+  },
+
+  prefetchCommunityProfiles({ force = false } = {}) {
+    const cached = this.getCommunityProfilesCache()
+    if (!force && cached) return Promise.resolve(cached)
+    if (this.globalData.communityProfilesPending) {
+      return this.globalData.communityProfilesPending
+    }
+
+    const pending = this.request({
+      url: '/api/community',
+      method: 'GET',
+      showLoading: false,
+      showError: false,
+      retry: 0,
+      timeout: 6000,
+    }).then(payload => {
+      const data = (payload && payload.data) || {}
+      const list = Array.isArray(data.list)
+        ? data.list
+        : Array.isArray(payload && payload.list)
+          ? payload.list
+          : []
+      return this.setCommunityProfilesCache(list)
+    }).finally(() => {
+      this.globalData.communityProfilesPending = null
+    })
+
+    this.globalData.communityProfilesPending = pending
+    return pending
   },
 
   showGlobalLoading(loadingText = '加载中...') {

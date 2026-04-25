@@ -1,5 +1,5 @@
 <view class="page">
-  <scroll-view class="cat-scroll" scroll-x scroll-with-animation>
+  <scroll-view class="cat-scroll" scroll-x>
     <view class="cat-tabs">
       <view
         wx:for="{{categories}}"
@@ -13,13 +13,13 @@
     </view>
   </scroll-view>
 
-  <view class="subnav-shell {{activeCat === 'captain' ? 'subnav-shell--captain' : ''}}" wx:if="{{activeCat === 'captain' || currentSubTabs.length > 0}}">
-    <view class="game-dock-card" wx:if="{{activeCat === 'captain'}}">
+  <view class="subnav-shell {{activeCat === 'captain' ? 'subnav-shell--captain' : ''}}">
+    <view class="game-dock-card" hidden="{{activeCat !== 'captain'}}">
       <view class="game-dock-head">
         <text class="game-dock-title">{{activeCatLabel}}</text>
         <text class="game-dock-arrow">></text>
       </view>
-      <scroll-view class="game-dock-scroll" scroll-x scroll-with-animation>
+      <scroll-view class="game-dock-scroll" scroll-x>
         <view class="game-dock-row">
           <view
             wx:for="{{captainGameShortcuts}}"
@@ -29,7 +29,7 @@
             data-sub="{{item.name}}"
           >
             <view class="game-dock-thumb-wrap">
-              <image class="game-dock-thumb" src="{{item.image}}" mode="aspectFit" />
+              <image class="game-dock-thumb" src="{{item.image}}" mode="aspectFit" binderror="handleShortcutImageError" data-id="{{item.id}}" />
             </view>
             <text class="game-dock-name">{{item.name}}</text>
           </view>
@@ -37,8 +37,15 @@
       </scroll-view>
     </view>
 
-    <view class="sub-scroll-wrap" wx:else>
-      <scroll-view class="sub-scroll" scroll-x scroll-with-animation>
+    <view class="sub-scroll-wrap" hidden="{{activeCat === 'captain' || currentSubTabs.length === 0}}">
+      <view class="sub-filter-head">
+        <view class="sub-filter-copy">
+          <text class="sub-filter-title">{{activeCatLabel}}</text>
+          <text class="sub-filter-desc">选择细分板块，快速定位可信角色</text>
+        </view>
+        <text class="sub-filter-count">{{currentSubTabs.length}} 类</text>
+      </view>
+      <scroll-view class="sub-scroll" scroll-x>
         <view class="sub-tabs">
           <view
             wx:for="{{currentSubTabs}}"
@@ -50,66 +57,84 @@
         </view>
       </scroll-view>
     </view>
-  </view>
 
-  <view class="empty-state" wx:if="{{loading && currentList.length === 0}}">
-    <text class="empty-icon">...</text>
-    <text class="empty-title">加载中...</text>
-  </view>
-
-  <view class="list-loading-mask" wx:if="{{loading && currentList.length > 0}}">
-    <text class="list-loading-text">正在切换内容...</text>
-  </view>
-
-  <view class="empty-state empty-state--error" wx:elif="{{pageState.status === 'error'}}">
-    <text class="empty-icon">!</text>
-    <text class="empty-title">加载失败</text>
-    <text class="empty-desc">{{pageState.errorMessage}}</text>
-    <view class="empty-action" bindtap="retryFetchList">点击重试</view>
-  </view>
-
-  <view class="empty-state" wx:elif="{{pageState.status === 'empty'}}">
-    <text class="empty-icon">名</text>
-    <text class="empty-title">暂无认证名流</text>
-    <text class="empty-desc">该板块正在招募中，敬请期待</text>
-  </view>
-
-  <view class="card-list" wx:if="{{currentList.length > 0}}">
-    <view
-      wx:for="{{currentList}}"
-      wx:key="id"
-      class="profile-card"
-      bindtap="onCardTap"
-      data-id="{{item.id}}"
-    >
-      <view class="card-ribbon {{item.badgeType}}"></view>
-
-      <view class="card-body">
-        <view class="avatar-wrap">
-          <image class="avatar-img" src="{{item.avatar || '/assets/default_avatar.png'}}" mode="aspectFill"/>
-          <view class="badge-icon {{item.badgeType}}">{{item.badgeIcon}}</view>
+    <view class="sub-scroll-wrap sub-scroll-wrap--empty" hidden="{{activeCat === 'captain' || currentSubTabs.length > 0}}">
+      <view class="sub-filter-head">
+        <view class="sub-filter-copy">
+          <text class="sub-filter-title">{{activeCatLabel}}</text>
+          <text class="sub-filter-desc">该板块暂不需要二级筛选，内容会直接展示在下方</text>
         </view>
+      </view>
+    </view>
+  </view>
 
-        <view class="info-wrap">
-          <view class="name-row">
-            <text class="name-text">{{item.nickname}}</text>
-            <view class="badge-tag {{item.badgeType}}">{{item.badgeLabel}}</view>
+  <view class="content-stage {{contentReady ? 'content-stage--ready' : ''}}">
+    <view class="initial-skeleton" wx:if="{{loading && (currentList.length === 0 || currentListKey !== activeListKey)}}">
+      <view class="skeleton-card" wx:for="{{skeletonRows}}" wx:key="*this">
+        <view class="skeleton-avatar"></view>
+        <view class="skeleton-lines">
+          <view class="skeleton-line skeleton-line--title"></view>
+          <view class="skeleton-line"></view>
+          <view class="skeleton-line skeleton-line--short"></view>
+        </view>
+      </view>
+    </view>
+
+    <view class="empty-state empty-state--error" wx:elif="{{pageState.status === 'error'}}">
+      <text class="empty-icon">!</text>
+      <text class="empty-title">加载失败</text>
+      <text class="empty-desc">{{pageState.errorMessage}}</text>
+      <view class="empty-action" bindtap="retryFetchList">点击重试</view>
+    </view>
+
+    <view class="empty-state" wx:elif="{{pageState.status === 'empty'}}">
+      <text class="empty-icon">暂无</text>
+      <text class="empty-title">暂无认证名流</text>
+      <text class="empty-desc">该板块正在招募中，敬请期待</text>
+    </view>
+
+    <view class="card-list" wx:if="{{currentList.length > 0 && currentListKey === activeListKey}}">
+      <view
+        wx:for="{{currentList}}"
+        wx:key="id"
+        class="profile-card"
+        bindtap="onCardTap"
+        data-id="{{item.id}}"
+      >
+        <view class="card-ribbon {{item.badgeType}}"></view>
+
+        <view class="card-body">
+          <view class="avatar-wrap">
+            <image class="avatar-img" src="{{item.avatar || '/assets/default_avatar.png'}}" mode="aspectFill" binderror="handleAvatarImageError" data-id="{{item.id}}"/>
+            <view class="badge-icon {{item.badgeType}}">{{item.badgeIcon}}</view>
           </view>
-          <text class="game-tag" wx:if="{{item.gameTag}}">{{item.gameTag}}</text>
-          <text class="bio-text">{{item.bio}}</text>
 
-          <view class="contact-row">
-            <view class="contact-btn wechat-btn" wx:if="{{item.wechat}}" catchtap="copyContact" data-val="{{item.wechat}}" data-label="微信">
-              <text class="contact-icon">微</text>
-              <text class="contact-label">微信</text>
+          <view class="info-wrap">
+            <view class="name-row">
+              <text class="name-text">{{item.nickname}}</text>
+              <view class="badge-tag {{item.badgeType}}">{{item.badgeLabel}}</view>
             </view>
-            <view class="contact-btn qq-btn" wx:if="{{item.qq}}" catchtap="copyContact" data-val="{{item.qq}}" data-label="QQ">
-              <text class="contact-icon">Q</text>
-              <text class="contact-label">QQ</text>
+            <text class="game-tag" wx:if="{{item.gameTag}}">{{item.gameTag}}</text>
+            <text class="bio-text">{{item.bio}}</text>
+
+            <view class="contact-row">
+              <view class="contact-btn wechat-btn" wx:if="{{item.wechat}}" catchtap="copyContact" data-val="{{item.wechat}}" data-label="微信">
+                <text class="contact-icon">微</text>
+                <text class="contact-label">微信</text>
+              </view>
+              <view class="contact-btn qq-btn" wx:if="{{item.qq}}" catchtap="copyContact" data-val="{{item.qq}}" data-label="QQ">
+                <text class="contact-icon">Q</text>
+                <text class="contact-label">QQ</text>
+              </view>
             </view>
           </view>
         </view>
       </view>
+    </view>
+
+    <view class="list-loading-mask" wx:if="{{loading && currentList.length > 0 && currentListKey === activeListKey}}">
+      <text class="list-loading-dot"></text>
+      <text class="list-loading-text">正在切换内容</text>
     </view>
   </view>
 

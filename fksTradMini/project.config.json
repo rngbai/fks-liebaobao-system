@@ -33,7 +33,10 @@
   "libVersion": "3.15.2",
   "simulatorPluginLibVersion": {},
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      { "type": "folder", "value": "node_cache" },
+      { "type": "folder", "value": "node_modules" }
+    ],
     "include": []
   },
   "editorSetting": {}
